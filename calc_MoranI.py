@@ -33,51 +33,83 @@ adata_by_sample = {
     for sid in sample_ids
 }
 
-### compute Moran’s I for each of the first 30 varimax-rotated PCs using scanp
-
-# 1. Store each rotated factor as an observation-level column (adata.obs)
-for i in range(30):
-    adata_merged.obs[f'vpca_{i+1}'] = adata_merged.obsm['X_vpca'][:, i]
-
-# 2. Build spatial graph (if not already done)
-sq.gr.spatial_neighbors(adata_merged, coord_type="generic", n_neighs=20)
-
-# 2. Compute Moran's I for the rotated PC scores
-sq.gr.spatial_autocorr(
-    adata_merged,
-    mode="moran",
-    genes=[f'vpca_{i+1}' for i in range(30)],
-    attr="obs"  # <- Tell Squidpy to use .obs instead of .X
-)
-
-# 3. Extract and sort the results
-moran_df = adata_merged.uns['moranI'].copy()
-moran_df_sorted = moran_df.sort_values('I', ascending=False)
-
-# 4. Show top spatially patterned factors
-print(moran_df_sorted.head(10))
+### compute Moran’s I for each of the first 30 varimax-rotated PCs using scanp for each samples seperately
+### save the results in adata.uns['moranI'] 
 
 
-moran_df = pd.DataFrame({
-    'Factor': moran_df_sorted.index,
-    'MoranI': moran_df_sorted['I'],
-    'pval': moran_df_sorted['pval_norm'],
-}).sort_values(by='MoranI', ascending=False)
+moran_results = {}
+for sid in sample_ids:
+    ad = adata_by_sample[sid]
+    
+    # Ensure spatial coordinates are present
+    if 'spatial' not in ad.obsm:
+        raise ValueError(f"Spatial coordinates not found in the adata object for sample {sid}.")
+    
+    # Store each rotated factor as an observation-level column (adata.obs)
+    for i in range(30):
+        ad.obs[f'vpca_{i+1}'] = ad.obsm['X_vpca'][:, i]
 
-plt.figure(figsize=(10, 5))
-sns.barplot(x='Factor', y='MoranI', data=moran_df.head(15), palette="viridis")
-plt.title("Top 15 Most spatially-variable vPCs")
-plt.ylabel("MoranI")
+    # Build spatial graph (if not already done)
+    sq.gr.spatial_neighbors(ad, coord_type="generic", n_neighs=20)
+
+    # Compute Moran's I for the rotated PC scores
+    sq.gr.spatial_autocorr(
+        ad,
+        mode="moran",
+        genes=[f'vpca_{i+1}' for i in range(30)],
+        attr="obs"  # <- Tell Squidpy to use .obs instead of .X
+    )
+    # Extract and store the results in adata.uns
+    moran_df = ad.uns['moranI'].copy()
+    moran_df_sorted = moran_df.sort_values('I', ascending=False)
+    moran_results[sid] = moran_df_sorted
+    adata_merged.uns[f'moranI_{sid}'] = moran_df
+
+
+#### identify the factors that have varuable moran's I across normal and PSC samples
+### print top 10 factors for each sample
+for sid, moran_df in moran_results.items():
+    print(f"Top 10 Moran's I factors for sample {sid}:")
+    print(moran_df.head(10).index.tolist())
+    print("\n")
+
+# for each factor, calculate the mean Moran's I across normal(normal_A tp D) and PSC (PSC_A to D)samples 
+normal_samples = [sid for sid in sample_ids if 'normal' in sid]
+psc_samples = [sid for sid in sample_ids if 'PSC' in sid]
+moran_means = {}
+for factor in moran_results[sample_ids[0]].index:
+    normal_values = [moran_results[sid].loc[factor, 'I'] for sid in normal_samples if factor in moran_results[sid].index]
+    psc_values = [moran_results[sid].loc[factor, 'I'] for sid in psc_samples if factor in moran_results[sid].index]
+    
+    moran_means[factor] = {
+        'normal_mean': np.mean(normal_values) if normal_values else np.nan,
+        'psc_mean': np.mean(psc_values) if psc_values else np.nan
+    }
+moran_means_df = pd.DataFrame(moran_means).T
+moran_means_df['diff'] = moran_means_df['psc_mean'] - moran_means_df['normal_mean']
+moran_means_df_sorted = moran_means_df.sort_values(by='diff', ascending=False)
+print("Moran's I means for factors across normal and PSC samples:")
+print(moran_means_df_sorted.head(10))
+
+
+plt.figure(figsize=(12, 18))
+sns.heatmap(moran_means_df_sorted[['normal_mean', 'psc_mean', 'diff']], annot=True, cmap='coolwarm', center=0)
+plt.title("Moran's I Means for Factors Across Normal and PSC Samples")
+plt.xlabel("Factors")
+plt.ylabel("Sample Type")
 plt.xticks(rotation=45)
 plt.tight_layout()
-plt.show()
+
+## select the top 8 factors based on Moran's I difference (4 postive and 4 negative differences)
+top_factors = moran_means_df_sorted.head(4).index.tolist()
+bottom_factors = moran_means_df_sorted.tail(4).index.tolist()
+top_bottom_factors = top_factors + bottom_factors
 
 ### define top10 indices based on moran_df_sorted indices
-top10_spatial_vPCs = moran_df_sorted.head(10).index.tolist()
-top10_spatial_indices = [int(f[5:]) - 1 for f in top10_spatial_vPCs] 
+top_spatial_indices = [int(f[5:]) - 1 for f in top_bottom_factors] 
 
 # Visualize each of these across spatial coordinates per sample
-for idx in top10_spatial_indices:
+for idx in top_spatial_indices:
     factor_name = f"vPCA{idx + 1}"
     all_vals = adata_merged.obsm["X_vpca"][:, idx]
     vmin, vmax = np.quantile(all_vals, [0.01, 0.99])
@@ -107,3 +139,15 @@ for idx in top10_spatial_indices:
     plt.suptitle(f"{factor_name} across spatial coordinates", fontsize=14)
     plt.tight_layout(rect=[0, 0, 0.9, 0.95])
     plt.show()
+
+
+
+'''
+
+i have a code that runs moran' I on varimax factors.- now i want to use spatialDE instead of moran'I on my factors to see how teh results differ:
+
+https://github.com/Teichlab/SpatialDE/tree/master
+
+
+
+'''
