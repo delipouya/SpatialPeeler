@@ -71,6 +71,24 @@ for sid in sample_ids:
     results_dic[sid] = results
 
 
+## aadd the samoke name to results_dic and convert to DataFrame
+results_list = []
+for sid, results in results_dic.items():
+    results_df = pd.DataFrame(results)
+    results_df['sample_id'] = sid
+    results_list.append(results_df)
+results_df = pd.concat(results_list, ignore_index=True)
+
+### save results_df to a CSV file
+output_csv = Path.home() / 'SpatialPeeler' / 'data_PSC' / 'spatialde_results.csv'
+results_df.to_csv(output_csv, index=False)
+
+
+
+
+
+
+
  # Initialize a DataFrame to store q-values
 qvals_df = pd.DataFrame(index=factor_names)
 
@@ -92,6 +110,7 @@ qvals_df['qval_diff'] = qvals_df['psc_mean_qval'] - qvals_df['normal_mean_qval']
 
 # Sort by difference
 qvals_df_sorted = qvals_df.sort_values('qval_diff')
+### visua
 
 
 

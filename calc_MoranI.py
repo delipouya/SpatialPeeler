@@ -144,9 +144,6 @@ for idx in top_spatial_indices:
 
 '''
 
-i have a code that runs moran' I on varimax factors.- now i want to use spatialDE instead of moran'I on my factors to see how teh results differ:
-
-https://github.com/Teichlab/SpatialDE/tree/master
 
 
 
