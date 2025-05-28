@@ -284,6 +284,13 @@ for factor_idx in range(10):  # or up to 12 if you'd like
 adata = adata_merged.copy()
 adata_merged.obsm["X_pca"] = adata_merged.obsm["X_nmf"]  # Use NMF factors as PCA scores
 
+### save the adata object
+adata_merged.write_h5ad(os.path.join(root_path, 'SpatialPeeler', 'data_PSC', 'PSC_NMF.h5ad'))
+
+
+
+
+
 ## run the model.py script within the hiddensc package
 num_pcs, ks, ks_pval = determine_pcs_heuristic_ks_nmf(adata=adata, 
                                                                   orig_label="binary_label", 
@@ -374,26 +381,241 @@ for result in results:
     sm = plt.cm.ScalarMappable(cmap="viridis", norm=plt.Normalize(vmin=0, vmax=vmax))
     fig.colorbar(sm, cax=cbar_ax, label="p_hat")
 
-    plt.suptitle("HiDDEN predictions (p_hat) across spatial coordinates for factor " + str(counter), fontsize=16)
+    plt.suptitle("HiDDEN predictions (p_hat) across spatial coordinates for factor " 
+                 + str(counter), fontsize=16)
     plt.tight_layout(rect=[0, 0, 0.9, 0.95])
     plt.show()
     counter += 1
 
 
 
-df_violin = adata.obs[["sample_id", "p_hat"]].copy()
-plt.figure(figsize=(10, 5))
-sns.violinplot(
-    x="sample_id", y="p_hat", hue="sample_id", data=df_violin,
-    palette="Set2", density_norm="width", inner=None, legend=False
+    df_violin = adata.obs[["sample_id", "p_hat"]].copy()
+    plt.figure(figsize=(10, 5))
+    sns.violinplot(
+        x="sample_id", y="p_hat", hue="sample_id", data=df_violin,
+        palette="Set2", density_norm="width", inner=None, legend=False
+    )
+    sns.boxplot(
+        x="sample_id", y="p_hat", data=df_violin,
+        color="white", width=0.1, fliersize=0
+    )
+    plt.xticks(rotation=45, ha="right")
+    plt.title("Distribution of p_hat per sample")
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+### Gives an average prediction confidence over factors.
+# If your goal is to highlight subtle, distributed signals across factors in a robust way:
+combined_p_hat_1 = np.mean([r['p_hat'] for r in results], axis=0)
+
+
+#### Weight by a proxy for factor importance, e.g., variance, AUC, or KS score.
+# Example: weight by factor variance
+variances = [np.var(r['p_hat']) for r in results]
+weights = np.array(variances) / np.sum(variances)
+combined_p_hat_2 = np.average([r['p_hat'] for r in results], axis=0, weights=weights)
+
+
+#### Fit a meta-model (e.g., logistic regression) on the matrix of all p_hat values.
+# Stack all p_hat values into a feature matrix (n_cells x n_factors)
+X_stack = np.column_stack([r['p_hat'] for r in results])
+y = adata.obs['status'].values
+# Fit logistic regression on top
+clf = LogisticRegression(random_state=RAND_SEED, penalty=None).fit(X_stack, y)
+combined_p_hat_3 = clf.predict_proba(X_stack)[:, 1]
+
+
+# If instead you want to identify cells where any one factor is strongly perturbed (more conservative):
+combined_p_hat_4 = np.max([r['p_hat'] for r in results], axis=0)
+
+# Store the combined p_hat in adata
+phat_combined = np.column_stack([
+    combined_p_hat_1,  # or combined_p_hat_2, 3, or 4
+    combined_p_hat_2,
+    combined_p_hat_3,
+    combined_p_hat_4
+]) 
+
+adata.obs['p_hat_combined_1'] = phat_combined[:, 0]
+adata.obs['p_hat_combined_2'] = phat_combined[:, 1]
+adata.obs['p_hat_combined_3'] = phat_combined[:, 2]
+adata.obs['p_hat_combined_4'] = phat_combined[:, 3]
+
+# Stack factor-wise p_hat values
+p_hat_matrix = np.column_stack([r["p_hat"] for r in results])  # shape: (n_cells, n_factors)
+W = adata.obsm["X_nmf"][:, :p_hat_matrix.shape[1]]  # shape: (n_cells, n_factors)
+# Normalize weights row-wise so they sum to 1
+W_normalized = W / W.sum(axis=1, keepdims=True)
+# Compute combined p_hat per cell as weighted sum
+combined_p_hat_spatial = np.sum(W_normalized * p_hat_matrix, axis=1)
+adata.obs["p_hat_combined_5"] = combined_p_hat_spatial.astype(np.float32)
+
+### calculate combined p_hat spatially - based on NMF weights
+
+def plot_combined_p_hat(a, sample_id, p_hat_col):
+        spatial = a.obsm["spatial"]
+        p_hat = a.obs[p_hat_col].values
+
+        upper = np.quantile(p_hat, 0.99)
+        p_hat = np.minimum(p_hat, upper)
+
+        plt.figure(figsize=(5, 5))
+        sc = plt.scatter(spatial[:, 0], spatial[:, 1], c=p_hat, cmap="viridis", s=10)
+        plt.axis("equal")
+        plt.title(f"Combined p_hat {p_hat_col} – {sample_id}", fontsize=14)
+        plt.colorbar(sc, label="p_hat")
+        plt.xticks([]); plt.yticks([])
+        plt.tight_layout()
+        plt.show()
+
+# Plot the combined p_hat spatially
+for i in range(5):
+    ############# plotting all samples in a grid
+    
+    sample_ids = adata.obs['sample_id'].unique().tolist()
+    adata_by_sample = {
+        sample_id: adata[adata.obs['sample_id'] == sample_id].copy()
+        for sample_id in sample_ids
+    }
+    # Plot 2x4 grid for each combined p_hat
+    fig, axs = plt.subplots(2, 4, figsize=(16, 8))
+    axs = axs.flatten()
+    for j, sid in enumerate(sample_ids):
+        a = adata_by_sample[sid]
+        p_hat_col = f'p_hat_combined_{i+1}'
+        spatial = a.obsm["spatial"]
+        p_hat = a.obs[p_hat_col].clip(upper=np.quantile(adata.obs[p_hat_col], 0.99))
+
+        axs[j].scatter(spatial[:, 0], spatial[:, 1], c=p_hat, cmap="viridis", s=10)
+        axs[j].set_title(sid, fontsize=10)
+        axs[j].axis("off")
+    # Add shared colorbar
+    cbar_ax = fig.add_axes([0.92, 0.25, 0.015, 0.5])
+    sm = plt.cm.ScalarMappable(cmap="viridis", norm=plt.Normalize(vmin=0, vmax=1))
+    fig.colorbar(sm, cax=cbar_ax, label="p_hat")
+    plt.suptitle(f"Combined p_hat {p_hat_col} across spatial coordinates", fontsize=16)
+    plt.tight_layout(rect=[0, 0, 0.9, 0.95])
+    plt.show()
+
+
+# Save the updated AnnData object with combined p_hat
+### make violin plots for all combined p_hat across samples
+df_violin = adata.obs[["sample_id", 
+                       "p_hat_combined_1", 
+                        "p_hat_combined_2",
+                        "p_hat_combined_3",
+                        "p_hat_combined_4",
+                        "p_hat_combined_5"
+                       ]].copy()
+
+for i in range(1, 6):
+    df_violin = adata.obs[["sample_id", 
+                           "p_hat_combined_"+str(i)]].copy()
+    df_violin.columns = ["sample_id", "p_hat_combined_"+str(i)]
+    
+    # Plot single violin plot for each combined p_hat
+    plt.figure(figsize=(10, 5))
+    sns.violinplot(
+        x="sample_id",
+        y="p_hat_combined_"+str(i),  # Change this to 2, 3, etc. for other combined p_hat
+        hue="sample_id",
+        data=df_violin,
+        palette="Set2",
+        density_norm="width",
+        inner=None,
+        legend=False
+    )
+    plt.xticks(rotation=45, ha="right")
+    plt.title(f"Distribution of p_hat_combined_{i} per sample")
+    plt.tight_layout()
+    plt.show()
+
+
+# Plot multi-violin plots
+df_violin_long = df_violin.melt(
+    id_vars="sample_id",
+    var_name="Combination",
+    value_name="p_hat"
 )
-sns.boxplot(
-    x="sample_id", y="p_hat", data=df_violin,
-    color="white", width=0.1, fliersize=0
+plt.figure(figsize=(20, 8))
+sns.violinplot(
+    x="sample_id", y="p_hat", hue="Combination", data=df_violin_long,
+    split=False, inner="box", palette="Set2", dodge=True
 )
 plt.xticks(rotation=45, ha="right")
-plt.title("Distribution of p_hat per sample")
+plt.title("Comparison of Combined p_hat Scores Across Samples")
+plt.xlabel("Sample ID")
+plt.ylabel("p_hat")
+plt.legend(title="Combination", bbox_to_anchor=(1.05, 1), loc="upper left")
 plt.tight_layout()
 plt.show()
 
 
+
+
+
+psc_mask = adata.obs["disease"] != "normal"
+psc_adata = adata[psc_mask].copy()
+psc_sample_ids = psc_adata.obs["sample_id"].unique()
+from sklearn.cluster import KMeans
+
+cluster_labels = pd.Series(index=psc_adata.obs_names, dtype="object")
+
+for sid in psc_sample_ids:
+    sample_mask = psc_adata.obs["sample_id"] == sid
+    p_hat_vals = psc_adata.obs.loc[sample_mask, "p_hat_combined_1"].values.reshape(-1, 1)
+
+    kmeans = KMeans(n_clusters=2, random_state=RAND_SEED)
+    labels = kmeans.fit_predict(p_hat_vals)
+
+    # Optional: force cluster 1 to be higher-mean cluster
+    mean0, mean1 = p_hat_vals[labels == 0].mean(), p_hat_vals[labels == 1].mean()
+    # If mean0 is greater, flip labels to ensure cluster 1 has higher mean
+    if mean0 > mean1:
+        labels = 1 - labels
+        temp = mean0
+        mean0 = mean1
+        mean1 = temp
+    # Print means for debugging
+    print(f"Sample {sid}: mean0={mean0:.4f}, mean1={mean1:.4f}")
+
+    cluster_labels.loc[sample_mask] = labels
+
+psc_adata.obs["kmeans_p_hat_combined_1"] = cluster_labels.astype("category")
+
+
+def plot_clusters_per_sample(adata_dict, col="kmeans_p_hat_combined_1", cmap="tab10"):
+    n = len(adata_dict)
+    ncols = 4
+    nrows = int(np.ceil(n / ncols))
+    fig, axs = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows))
+    axs = axs.flatten()
+
+    for i, (sid, a) in enumerate(adata_dict.items()):
+        spatial = a.obsm["spatial"]
+        clusters = a.obs[col].astype(int).values
+
+        axs[i].scatter(spatial[:, 0], spatial[:, 1], c=clusters, cmap=cmap, s=10)
+        axs[i].set_title(sid)
+        axs[i].axis("off")
+
+    for j in range(i+1, len(axs)):
+        axs[j].axis("off")
+
+    plt.suptitle("KMeans Clustering of p_hat_combined_1 in PSC samples", fontsize=16)
+    plt.tight_layout()
+    plt.show()
+
+# Example usage:
+# Split adata by sample
+psc_by_sample = {
+    sid: psc_adata[psc_adata.obs["sample_id"] == sid].copy()
+    for sid in psc_sample_ids
+}
+
+plot_clusters_per_sample(psc_by_sample, cmap="Paired")  # Or try "Paired", "Accent", "Dark2"
+
+###
