@@ -283,19 +283,63 @@ for i in range(optimal_num_pcs_ks):
     plt.show()
 
 
-# Inputs
+# Identifying genes assoiciated with the residuals
+for result in results:
+    print(f"Factor {result['factor_index'] + 1}:")
+    expr_matrix = adata.X.toarray() if issparse(adata.X) else adata.X  # shape: (n_spots, n_genes)
+    pearson_residuals = result['pearson_residual']    # shape: (n_spots,)
+    coords = adata.obsm['spatial']   # shape: (n_spots, 2)
+    # Run the correlation
+    cor_df = fn.pearson_correlation_with_residuals(expr_matrix, 
+                                                pearson_residuals, 
+                                                gene_names=adata.var_names)
+    cor_df = cor_df.sort_values("correlation", ascending=True)
+
+
+id_to_symbol = fn.map_ensembl_to_symbol(cor_df['gene'].tolist())
+cor_df['symbol'] = cor_df['gene'].map(id_to_symbol)
+cor_df
+
+#############################################
+######### Enrichment analysis using g:Profiler
+from gprofiler import GProfiler
+# Get top N gene symbols (drop NaNs first)
+top_genes = cor_df.dropna(subset=['symbol']).sort_values("correlation", ascending=True).head(200)["symbol"].tolist()
+# Run enrichment
+gp = GProfiler(return_dataframe=True)
+enrich_results = gp.profile(organism='hsapiens', query=top_genes)
+# View top results
+enrich_results[['source', 'name', 'p_value', 'intersection_size']].head(10)
+# Filter GO:BP terms only
+go_bp_results = enrich_results[enrich_results['source'] == 'GO:BP']
+# Show top 10 by p-value
+print(go_bp_results[['name', 'p_value', 'intersection_size']].sort_values('p_value').head(20))
+#############################################
+
+
+# Identifying genes assoiciated with the residuals
 for result in results:
     expr_matrix = adata.X.toarray() if issparse(adata.X) else adata.X  # shape: (n_spots, n_genes)
-    pearson_residuals = result['pearson_residual']         # shape: (n_spots,)
-    coords = adata.obsm['spatial']                                     # shape: (n_spots, 2)
-
+    pearson_residuals = result['pearson_residual']    # shape: (n_spots,)
+    coords = adata.obsm['spatial']   # shape: (n_spots, 2)
     # Run the correlation
     spatial_corr = fn.spatial_weighted_correlation_matrix(expr_matrix, pearson_residuals, 
                                                           coords, mode="geary")
-    # Get top genes
     top_genes = spatial_corr.sort_values(ascending=False).head(30)
 
 
+## TODO: 
+# check the time it takes to run the correlation function
+# make a standard correlation function - spatially unaware
+# how to interpret the scatter plot of p_hat vs nmf scores
+# run HiDDEN on the residuals from 30NMF regressed out - is there any data leakage?
+
+
+from scipy.sparse import issparse
+
+if not issparse(expr_matrix):
+    from scipy.sparse import csr_matrix
+    expr_matrix = csr_matrix(expr_matrix)
 
 
 
@@ -303,6 +347,9 @@ for result in results:
 
 
 
+######################################################################
+############## Combining p_hat values across factors ##############
+######################################################################
 
 ### Gives an average prediction confidence over factors.
 # If your goal is to highlight subtle, distributed signals across factors in a robust way:
