@@ -4,132 +4,53 @@ root_path = os.path.abspath('./..')
 sys.path.insert(0, root_path)
 import functools
 from tqdm import tqdm
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+import scipy.sparse as sp
 import hiddensc
 from hiddensc import utils, files, vis
-
 import scanpy as sc
 import scvi
 import anndata
 from sklearn.decomposition import NMF
 import functools
-
-import numpy as np
-import numpy as np
 from scipy.linalg import svd
 from numpy.linalg import LinAlgError
-
 from hiddensc import models
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder
 from matplotlib.patches import Patch
 from sklearn.cluster import KMeans
 from scipy.special import logit
-
-
 #from scipy.stats import mannwhitneyu
-RAND_SEED = 28
-np.random.seed(RAND_SEED)
-utils.set_random_seed(utils.RANDOM_SEED)
-utils.print_module_versions([sc, anndata, scvi, hiddensc])
-vis.visual_settings()
 from sklearn.exceptions import ConvergenceWarning
 import warnings
 warnings.simplefilter("ignore", category=ConvergenceWarning)
-
 from hiddensc import models
 from matplotlib.patches import Patch
 from sklearn.cluster import KMeans
 from scipy.special import logit
-
+from scipy.sparse import issparse
+import functions as fn
 
 RAND_SEED = 28
 CASE_COND = 1
-def standalone_logistic(X, y):
-    #clf = LogisticRegression(random_state=RAND_SEED, penalty='none').fit(X, y)
-    clf = LogisticRegression(random_state=RAND_SEED, penalty=None).fit(X, y)
-    predicted_label = clf.predict(X)
-    predicted_prob = clf.predict_proba(X)
-    return predicted_prob[:,1]
+np.random.seed(RAND_SEED)
+utils.set_random_seed(utils.RANDOM_SEED)
+utils.print_module_versions([sc, anndata, scvi, hiddensc])
+vis.visual_settings()
 
 
-def single_factor_logistic_evaluation(adata, factor_key="X_nmf", max_factors=30):
-    """
-    Evaluate each individual factor using logistic regression to predict status.
-    Performs KMeans on logit(p_hat) of case samples to identify subtypes.
-
-    Parameters:
-    - adata: AnnData object with .obsm[factor_key] storing factors
-    - factor_key: str, key in .obsm where factor matrix is stored
-    - max_factors: int, number of factors to evaluate (starting from index 0)
-
-    Returns:
-    - all_results: list of dicts with info for each factor
-    """
-    all_results = []
-    X = adata.obsm[factor_key]
-    y = adata.obs["status"].values
-    sample_ids = adata.obs["sample_id"].values
-
-    for i in range(min(max_factors, X.shape[1])):
-        print(f"Evaluating factor {i+1}...")
-        Xi = X[:, i].reshape(-1, 1)  # Single factor
-
-        # Step 1: Fit logistic regression on single factor
-        p_hat = standalone_logistic(Xi, y)
-        logit_p_hat = logit(p_hat)
-
-        # Step 2: Case-only clustering
-        case_mask = (y == CASE_COND)
-        kmeans_case = KMeans(n_clusters=2, random_state=0).fit(
-            logit_p_hat[case_mask].reshape(-1, 1)
-        )
-        mean0 = p_hat[case_mask][kmeans_case.labels_ == 0].mean()
-        mean1 = p_hat[case_mask][kmeans_case.labels_ == 1].mean()
-        zero_lab_has_lower_mean = mean0 < mean1
-        kmeans_labels = np.zeros_like(y)
-        kmeans_labels[case_mask] = [
-            1 if x == int(zero_lab_has_lower_mean) else 0
-            for x in kmeans_case.labels_
-        ]
-
-        # Step 3: Store results
-        result = {
-            "factor_index": i,
-            "p_hat": p_hat,
-            "logit_p_hat": logit_p_hat,
-            "kmeans_labels": kmeans_labels,
-            "status": y,
-            "sample_id": sample_ids,
-        }
-        all_results.append(result)
-
-        # Step 4: Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-        sns.histplot(x=logit_p_hat, hue=y, ax=axes[0])
-        axes[0].set_title(f'logit(p_hat), original labels (factor {i+1})')
-        sns.histplot(x=logit_p_hat, hue=kmeans_labels, ax=axes[1])
-        axes[1].set_title(f'logit(p_hat), KMeans labels (factor {i+1})')
-        plt.tight_layout()
-        plt.show()
-
-    return all_results
-
-
-
-
+# --------- Import data and preprocess ---------
 # Files to load
 file_names = [
     "normal_A", "normal_B", "normal_C", "normal_D",
     "PSC_A", "PSC_B", "PSC_C", "PSC_D"
 ]
 
-
+    
 adata_dict = {}
 cell_type_sets = {}
 # Load and extract unique cell types
@@ -147,7 +68,6 @@ for fname in file_names:
     cell_types = adata.obs['cell_type'].unique()
     cell_type_sets[fname] = set(cell_types)
 
-
 # Add batch info before merging
 for fname, ad in adata_dict.items():
     ad.obs["batch"] = fname  # This will let HiDDEN know the origin
@@ -159,56 +79,33 @@ adata_merged.obs['batch'] = adata_merged.obs['batch'].astype(str)
 adata_merged.obs['sample_id'] = adata_merged.obs['sample_id'].astype(str)
 
 ### Apply NMF
-n_components = 10
-# ------------------------------------
 # Step 1: Normalize and log-transform - I DIDN'T USE THIS
-# ------------------------------------
-sc.pp.normalize_total(adata_merged, target_sum=1e4)
-sc.pp.log1p(adata_merged)
-adata_merged.layers["lognorm"] = adata_merged.X.copy()
+#sc.pp.normalize_total(adata_merged, target_sum=1e4)
+#sc.pp.log1p(adata_merged)
+#adata_merged.layers["lognorm"] = adata_merged.X.copy()
+# ------------------
 
-# ------------------------------------
-# Step 2: Apply NMF
-# ------------------------------------
-n_factors = 10  # or choose based on elbow plot, coherence, etc.
-nmf_model = NMF(n_components=n_factors, init='nndsvda', random_state=RAND_SEED, max_iter=1000)
-
-# Apply NMF to log-normalized expression matrix
+n_factors = 30  # or choose based on elbow plot, coherence, etc.
+nmf_model = NMF(n_components=n_factors, init='nndsvda', 
+                random_state=RAND_SEED, max_iter=1000)
 # X must be dense; convert if sparse
-import scipy.sparse as sp
 X = adata_merged.X
 if sp.issparse(X): 
     X = X.toarray()
-
 W = nmf_model.fit_transform(X)  # cell × factor matrix
 H = nmf_model.components_        # factor × gene matrix
 
-# ------------------------------------
-# Step 3: Save results in AnnData
-# ------------------------------------
 adata_merged.obsm["X_nmf"] = W
 adata_merged.uns["nmf_components"] = H
+#adata_merged.write_h5ad(os.path.join(root_path, 'SpatialPeeler', 
+#                                     'data_PSC', 'PSC_NMF_30.h5ad'))
+# ---------------------------------------------
 
-def plot_spatial_nmf(adata, factor_idx, sample_id=None):
-    spatial = adata.obsm["spatial"]
-    values = adata.obsm["X_nmf"][:, factor_idx]
 
-    # Clip extremes for visualization
-    vmax = np.quantile(values, 0.99)
-    vmin = np.quantile(values, 0.01)
-    values = np.clip(values, vmin, vmax)
+adata_merged = sc.read_h5ad(os.path.join(root_path, 'SpatialPeeler',
+                                     'data_PSC', 'PSC_NMF_30.h5ad'))
 
-    plt.figure(figsize=(5, 5))
-    sc_plot = plt.scatter(spatial[:, 0], spatial[:, 1], c=values, cmap="viridis", s=10)
-    plt.axis("equal")
-    title = f"NMF Factor {factor_idx + 1}"
-    if sample_id:
-        title += f" – {sample_id}"
-    plt.title(title)
-    plt.colorbar(sc_plot, label=f"NMF{factor_idx + 1}")
-    plt.xticks([]); plt.yticks([])
-    plt.tight_layout()
-    plt.show()
+
 
 sample_ids = adata_merged.obs['sample_id'].unique().tolist()
 # Create a dictionary splitting the merged data by sample
@@ -217,60 +114,39 @@ adata_by_sample = {
     for sid in adata_merged.obs['sample_id'].unique()
 }
 sample_ids = list(adata_by_sample.keys())
+
 # Plot for each sample and NMF factor 1–4
-for sid in sample_ids:
-    print(f"Plotting NMF for sample {sid}")
-    for k in range(4):
-        plot_spatial_nmf(adata_by_sample[sid], k, sample_id=sid)
+#for sid in sample_ids:
+#    print(f"Plotting NMF for sample {sid}")
+#    for k in range(n_factors-1):
+#        fn.plot_spatial_nmf(adata_by_sample[sid], k, sample_id=sid)
 
+total_factors = adata_merged.obsm["X_nmf"].shape[1]
 adata = adata_merged
-nmf_factors = adata.obsm['X_nmf'][:, :4]
-nmf_df = pd.DataFrame(nmf_factors, columns=[f'NMF{i+1}' for i in range(4)])
+
+nmf_factors = adata.obsm['X_nmf'][:, :8]
+nmf_df = pd.DataFrame(nmf_factors, 
+                      columns=[f'NMF{i+1}' for i in range(nmf_factors.shape[1])])
 nmf_df['sample_id'] = adata.obs['sample_id'].values
+nmf_long = nmf_df.melt(id_vars='sample_id', 
+                       var_name='Factor', 
+                       value_name='Score')
 
-nmf_long = nmf_df.melt(id_vars='sample_id', var_name='Factor', value_name='Score')
-
-plt.figure(figsize=(12, 6))
-sns.violinplot(x="Factor", y="Score", hue="sample_id", data=nmf_long, inner="box", palette="Set2")
-plt.title("Distribution of NMF1–NMF4 Across Samples")
+plt.figure(figsize=(8, 35))
+sns.violinplot(y="Factor", x="Score", hue="sample_id", data=nmf_long, inner="box", palette="Set2")
+plt.title("Distribution of NMF Across Samples")
 plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.tight_layout()
 plt.show()
 
 
-# ------------------------------------
-# Step 6: Visualize NMF factors across samples
-# ------------------------------------
-for factor_idx in range(10):  # or up to 12 if you'd like
-    factor_name = f"NMF{factor_idx + 1}"
-
-    all_vals = adata.obsm["X_nmf"][:, factor_idx]
-    vmin, vmax = np.quantile(all_vals, [0.01, 0.99])
-
-    n_cols = 4
-    n_rows = int(np.ceil(len(sample_ids) / n_cols))
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(16, 8))
-    axs = axs.flatten()
-
-    for i, sid in enumerate(sample_ids):
-        ad = adata_by_sample[sid]
-        spatial = ad.obsm["spatial"]
-        scores = ad.obsm["X_nmf"][:, factor_idx]
-        im = axs[i].scatter(
-            spatial[:, 0], spatial[:, 1],
-            c=np.clip(scores, vmin, vmax),
-            cmap="viridis", s=10, vmin=vmin, vmax=vmax
-        )
-        axs[i].set_title(sid, fontsize=10)
-        axs[i].axis("off")
-
-    cbar_ax = fig.add_axes([0.92, 0.25, 0.015, 0.5])
-    cb = fig.colorbar(im, cax=cbar_ax)
-    cb.set_label(f"{factor_name} value", fontsize=12)
-
-    plt.suptitle(f"{factor_name} across spatial coordinates", fontsize=14)
-    plt.tight_layout(rect=[0, 0, 0.9, 0.95])
-    plt.show()
+plt.figure(figsize=(16, 6))
+sns.violinplot(x="Factor", y="Score", hue="sample_id", data=nmf_long, inner="box", palette="Set2")
+plt.title("Distribution of NMF Across Samples")
+plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), 
+           loc='upper left')
+plt.tight_layout()
+plt.show()
 
 
 
@@ -284,19 +160,13 @@ for factor_idx in range(10):  # or up to 12 if you'd like
 adata = adata_merged.copy()
 adata_merged.obsm["X_pca"] = adata_merged.obsm["X_nmf"]  # Use NMF factors as PCA scores
 
-### save the adata object
-adata_merged.write_h5ad(os.path.join(root_path, 'SpatialPeeler', 'data_PSC', 'PSC_NMF.h5ad'))
 
-
-
-
-
+'''
 ## run the model.py script within the hiddensc package
 num_pcs, ks, ks_pval = determine_pcs_heuristic_ks_nmf(adata=adata, 
                                                                   orig_label="binary_label", 
                                                                   max_pcs=60)
-optimal_num_pcs_ks = num_pcs[np.argmax(ks)]
-
+ptimal_num_pcs_ks = num_pcs[np.argmax(ks)]
 plt.figure(figsize=(4, 2))
 plt.scatter(num_pcs, ks, s=10, c='k', alpha=0.5)
 plt.axvline(x = optimal_num_pcs_ks, color = 'r', alpha=0.2)
@@ -305,38 +175,26 @@ plt.xticks(np.append(np.arange(0, 60, 15), optimal_num_pcs_ks), fontsize=18)
 plt.xlabel('Number of PCs')
 plt.ylabel('KS')
 plt.show()
-
 print(f"Optimal number of PCs: {optimal_num_pcs_ks}")
+'''
+
+optimal_num_pcs_ks = total_factors
 # Set up HiDDEN input
 adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
 adata.obs['status'] = adata.obs['binary_label'].astype(int).values
 
 # Run factor-wise HiDDEN-like analysis (logistic regression on single factors)
-results = single_factor_logistic_evaluation(
+results = fn.single_factor_logistic_evaluation(
     adata, factor_key="X_pca", max_factors=optimal_num_pcs_ks
 )
 
-
-# Plotting function
-def plot_spatial_p_hat(a, sample_id):
-    spatial = a.obsm["spatial"]
-    p_hat = a.obs["p_hat"].values
-
-    upper = np.quantile(p_hat, 0.99)
-    p_hat = np.minimum(p_hat, upper)
-
-    plt.figure(figsize=(5, 5))
-    sc = plt.scatter(spatial[:, 0], spatial[:, 1], c=p_hat, cmap="viridis", s=10)
-    plt.axis("equal")
-    plt.title(f"HiDDEN prediction – {sample_id}", fontsize=14)
-    plt.colorbar(sc, label="p_hat")
-    plt.xticks([]); plt.yticks([])
-    plt.tight_layout()
-    plt.show()
+for i in range(14,optimal_num_pcs_ks): #optimal_num_pcs_ks
+    fn.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
+    fn.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
 
 # Store output for the best-performing factor (e.g., first one, or pick based on AUC)
-counter = 1
-for result in results:
+counter = 29
+for result in results[28:]:
     print(f"Factor {result['factor_index'] + 1}:")
     print(f"  p_hat mean: {result['p_hat'].mean():.4f}")
     print(f"  KMeans labels: {np.unique(result['kmeans_labels'])}")
@@ -347,6 +205,9 @@ for result in results:
     adata.obs['new_label'] = result['kmeans_labels']
     adata.obs['new_label'] = adata.obs['new_label'].astype('category')
     adata.obs['p_hat'] = adata.obs['p_hat'].astype('float32')
+    adata.obs['raw_residual'] = result['raw_residual']
+    adata.obs['pearson_residual'] = result['pearson_residual']
+    adata.obs['deviance_residual'] = result['deviance_residual']
 
     # Copy adata per sample for plotting
     sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -354,40 +215,24 @@ for result in results:
         sample_id: adata[adata.obs['sample_id'] == sample_id].copy()
         for sample_id in sample_ids
     }
-
     # Plot spatial maps for the first 8 samples
     #for i in range(min(8, len(sample_ids))):
     #    plot_spatial_p_hat(adata_by_sample[sample_ids[i]], sample_ids[i])
+    
+    # For NMF factor  (from obsm)
+    fn.plot_grid(adata_by_sample, sample_ids, key="X_nmf", 
+    title_prefix="NMF Factor", counter=counter, from_obsm=True, factor_idx=3)
+    # For p_hat
+    fn.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
+    title_prefix="HiDDEN predictions", counter=counter)
+    # For raw residuals
+    fn.plot_grid(adata_by_sample, sample_ids, key="raw_residual", 
+    title_prefix="Raw Residual", counter=counter)
+    # For Pearson residuals
+    fn.plot_grid(adata_by_sample, sample_ids, key="pearson_residual", 
+    title_prefix="Pearson Residual", counter=counter)
 
-    ############# plotting all samples in a grid
-    # Get global 99th percentile for consistent color scale
-    p_hat_all = adata.obs["p_hat"].values
-    vmax = np.quantile(p_hat_all, 0.99)
-
-    # Plot 2x4 grid
-    fig, axs = plt.subplots(2, 4, figsize=(16, 8))
-    axs = axs.flatten()
-
-    for i, sid in enumerate(sample_ids):
-        a = adata_by_sample[sid]
-        spatial = a.obsm["spatial"]
-        p_hat = a.obs["p_hat"].clip(upper=vmax)
-
-        axs[i].scatter(spatial[:, 0], spatial[:, 1], c=p_hat, cmap="viridis", s=10, vmin=0, vmax=vmax)
-        axs[i].set_title(sid, fontsize=10)
-        axs[i].axis("off")
-    # Add shared colorbar
-    cbar_ax = fig.add_axes([0.92, 0.25, 0.015, 0.5])
-    sm = plt.cm.ScalarMappable(cmap="viridis", norm=plt.Normalize(vmin=0, vmax=vmax))
-    fig.colorbar(sm, cax=cbar_ax, label="p_hat")
-
-    plt.suptitle("HiDDEN predictions (p_hat) across spatial coordinates for factor " 
-                 + str(counter), fontsize=16)
-    plt.tight_layout(rect=[0, 0, 0.9, 0.95])
-    plt.show()
     counter += 1
-
-
 
     df_violin = adata.obs[["sample_id", "p_hat"]].copy()
     plt.figure(figsize=(10, 5))
@@ -403,6 +248,58 @@ for result in results:
     plt.title("Distribution of p_hat per sample")
     plt.tight_layout()
     plt.show()
+
+###### for all factors, plot p-hat vs nmf score as a scatter plot
+for i in range(optimal_num_pcs_ks):
+    nmf_scores = adata.obsm["X_nmf"][:, i]
+    p_hat = results[i]['p_hat']  # p_hat for the i-th factor
+
+    plt.figure(figsize=(8, 6))
+    plt.scatter(nmf_scores, p_hat, alpha=0.5, s=10)
+    plt.xlabel(f"NMF Factor {i+1} Score")
+    plt.ylabel("HiDDEN p_hat")
+    plt.title(f"p_hat vs NMF Factor {i+1} Score")
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
+
+
+
+for i in range(optimal_num_pcs_ks):
+    ### violin plot for nmf scores per sample
+    nmf_scores = adata.obsm["X_nmf"][:, i]
+    nmf_df = pd.DataFrame(nmf_scores,
+                            columns=[f'NMF{i+1}'])
+    nmf_df['sample_id'] = adata.obs['sample_id'].values
+    nmf_long = nmf_df.melt(id_vars='sample_id',
+                            var_name='Factor',
+                            value_name='Score')
+    plt.figure(figsize=(12, 5))
+    sns.violinplot(x="sample_id", y="Score", hue="sample_id",
+                     data=nmf_long, inner="box", palette="Set2")
+    plt.title(f"Distribution of NMF Factor {i+1} Scores per Sample")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.show()
+
+
+# Inputs
+for result in results:
+    expr_matrix = adata.X.toarray() if issparse(adata.X) else adata.X  # shape: (n_spots, n_genes)
+    pearson_residuals = result['pearson_residual']         # shape: (n_spots,)
+    coords = adata.obsm['spatial']                                     # shape: (n_spots, 2)
+
+    # Run the correlation
+    spatial_corr = fn.spatial_weighted_correlation_matrix(expr_matrix, pearson_residuals, 
+                                                          coords, mode="geary")
+    # Get top genes
+    top_genes = spatial_corr.sort_values(ascending=False).head(30)
+
+
+
+
+
+
 
 
 
