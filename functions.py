@@ -362,7 +362,32 @@ def pearson_correlation_with_residuals(expr_matrix, residual_vector, gene_names)
     })
 
 
-def spatial_weighted_correlation_matrix(expr_matrix, residual_vector, coords, k=8, mode="geary"):
+
+def compute_spatial_weights(coords, k=10, mode="geary"):
+    n = coords.shape[0]
+    nbrs = NearestNeighbors(n_neighbors=k+1).fit(coords)
+    distances, indices = nbrs.kneighbors(coords)
+
+    weights = np.zeros((n, n))
+    d_max = np.max(distances)
+
+    for i in range(n):
+        for j_idx in range(1, k+1):  # skip self
+            j = indices[i, j_idx]
+            d = distances[i, j_idx]
+            if mode == "geary":
+                weights[i, j] = 1.0 / (1 + d**2)
+            elif mode == "moran":
+                weights[i, j] = 1.0 - d / d_max
+            else:
+                raise ValueError("mode must be 'geary' or 'moran'")
+
+    W = weights + weights.T ## symmertric
+    W = W / W.sum()
+    return W
+
+
+def spatial_weighted_correlation_matrix_v1(expr_matrix, residual_vector, W):
     """
     Compute spatially weighted correlation between each gene and residuals.
 
@@ -372,10 +397,6 @@ def spatial_weighted_correlation_matrix(expr_matrix, residual_vector, coords, k=
         Gene expression matrix.
     residual_vector : np.ndarray (n_cells,)
         Residuals to correlate with each gene (e.g., pearson or raw).
-    coords : np.ndarray (n_cells, 2)
-        Spatial coordinates of each spot/cell.
-    k : int
-        Number of nearest neighbors.
     mode : str
         "geary" or "moran" style weighting.
 
@@ -386,25 +407,6 @@ def spatial_weighted_correlation_matrix(expr_matrix, residual_vector, coords, k=
     """
     n = len(residual_vector)
     residual_centered = residual_vector - residual_vector.mean()
-
-    # Spatial weights: build neighborhood
-    nbrs = NearestNeighbors(n_neighbors=k+1).fit(coords)
-    distances, indices = nbrs.kneighbors(coords)
-
-    weights = np.zeros((n, n))
-    for i in range(n):
-        for j_idx in range(1, k+1):  # skip self
-            j = indices[i, j_idx]
-            d = distances[i, j_idx]
-            if mode == "geary":
-                weights[i, j] = 1.0 / (1 + d**2)
-            elif mode == "moran":
-                weights[i, j] = 1.0 - d / np.max(distances)
-            else:
-                raise ValueError("mode must be 'geary' or 'moran'")
-    W = weights + weights.T
-    W = W / W.sum()
-
     # Correlation per gene
     correlations = []
     for g in range(expr_matrix.shape[1]):
@@ -420,6 +422,73 @@ def spatial_weighted_correlation_matrix(expr_matrix, residual_vector, coords, k=
             correlations.append(corr)
 
     return pd.Series(correlations)
+
+
+def spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W, gene_names=None):
+    """
+    Compute spatially weighted correlation between each gene and residuals (vectorized).
+
+    Parameters
+    ----------
+    expr_matrix : np.ndarray (n_cells, n_genes)
+        Gene expression matrix (dense or sparse, should be float).
+    residual_vector : np.ndarray (n_cells,)
+        Residuals to correlate with each gene (e.g., raw or Pearson).
+    W : np.ndarray (n_cells, n_cells)
+        Symmetric normalized spatial weight matrix.
+
+    Returns
+    -------
+    pd.Series
+        Spatially weighted correlation per gene.
+    """
+    # Center residuals
+    y = residual_vector - residual_vector.mean()
+    # Center expression matrix (each gene)
+    X = expr_matrix - expr_matrix.mean(axis=0)
+    # Compute weighted covariance between each gene and residual
+    cov_xy = X.T @ (W @ y)  # shape: (n_genes,)
+    # Compute spatially weighted variance of residual
+    Wy = W @ y
+    var_y = np.dot(y, Wy)
+    # Compute spatially weighted variance per gene
+    WX = W @ X  # shape: (n_cells, n_genes)
+    var_x = np.sum(X * WX, axis=0)  # shape: (n_genes,)
+    # Compute correlations
+    denom = np.sqrt(var_x * var_y)
+    correlations = np.divide(cov_xy, denom, out=np.full_like(cov_xy, np.nan), where=denom > 0)
+
+    return pd.DataFrame({
+        "gene": gene_names,
+        "correlation": correlations
+    })
+
+
+
+def weighted_mean(x, W):
+    weights = W.sum()
+    return (x.T @ W @ np.ones_like(x)) / weights
+
+def weighted_cov(x, y, W):
+    x = x.flatten()
+    y = y.flatten()
+    mu_x = weighted_mean(x, W)
+    mu_y = weighted_mean(y, W)
+
+    x_centered = x - mu_x
+    y_centered = y - mu_y
+
+    numerator = x_centered.T @ W @ y_centered
+    denominator = W.sum()
+
+    return numerator / denominator
+
+def weighted_corr(x, y, W):
+    cov_xy = weighted_cov(x, y, W)
+    var_x = weighted_cov(x, x, W)
+    var_y = weighted_cov(y, y, W)
+    return cov_xy / np.sqrt(var_x * var_y)
+
 
 
 
