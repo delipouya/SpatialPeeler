@@ -500,3 +500,21 @@ def map_ensembl_to_symbol(ensembl_ids):
     # Build mapping dict
     id_to_symbol = {r['query']: r.get('symbol', None) for r in result}
     return id_to_symbol
+
+
+
+def plot_gene_spatial(adata, gene_id, title, cmap="viridis"):
+    """Plot the expression of a single gene over spatial coordinates."""
+    if gene_id not in adata.var_names:
+        print(f"Gene {gene_id} not found in adata.var_names.")
+        return
+    gene_idx = adata.var_names.get_loc(gene_id)
+    expr = adata.X[:, gene_idx].toarray().flatten() if hasattr(adata.X, "toarray") else adata.X[:, gene_idx]
+    coords = adata.obsm["spatial"]
+    plt.figure(figsize=(5, 4))
+    plt.scatter(coords[:, 0], coords[:, 1], c=expr, cmap=cmap, s=10)
+    plt.title(title)
+    plt.axis("off")
+    plt.colorbar(label="Expression")
+    plt.tight_layout()
+    plt.show()

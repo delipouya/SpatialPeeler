@@ -102,7 +102,8 @@ adata_merged.uns["nmf_components"] = H
 # ---------------------------------------------
 
 
-adata_merged = sc.read_h5ad(os.path.join(root_path, 'SpatialPeeler','data_PSC', 'PSC_NMF_30.h5ad'))
+adata_merged = sc.read_h5ad(os.path.join(root_path, 'SpatialPeeler',
+                                         'data_PSC', 'PSC_NMF_30.h5ad'))
 
 sample_ids = adata_merged.obs['sample_id'].unique().tolist()
 # Create a dictionary splitting the merged data by sample
@@ -293,10 +294,6 @@ adata.obs['raw_residual'] = result['raw_residual']
 adata.obs['pearson_residual'] = result['pearson_residual']
 adata.obs['deviance_residual'] = result['deviance_residual']
 
-print(f"Factor {result['factor_index'] + 1}:")
-### sanity check
-fn.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
-    title_prefix="HiDDEN predictions", counter=factor_idx+1)
 
 # Copy adata per sample for plotting
 sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -305,7 +302,15 @@ adata_by_sample = {
     for sample_id in sample_ids
 }
 
-an_adata_sample = adata_by_sample[sample_ids[5]]
+print(f"Factor {result['factor_index'] + 1}:")
+### sanity check
+fn.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
+    title_prefix="HiDDEN predictions", counter=factor_idx+1)
+
+
+sample_id_to_check = 5
+#sample_id_to_check = 1
+an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
 # Compute spatial weights using squidpy
 # Get expression matrix and coordinates
 
@@ -318,8 +323,8 @@ W1_array = np.array(W1.todense())  # if W1 is sparse, convert to dense matrix
 
 ##### calculating spatial weights using custom function
 coords = an_adata_sample.obsm['spatial']  # shape: (n_spots, 2)
-W2_geary = compute_spatial_weights(coords, k=10, mode="geary")
-W2_moran = compute_spatial_weights(coords, k=10, mode="moran")
+W2_geary = fn.compute_spatial_weights(coords, k=10, mode="geary")
+W2_moran = fn.compute_spatial_weights(coords, k=10, mode="moran")
 
 print('squidpy-W mean: ', W1_array.mean(),
        'squidpy-W sd: ', W1_array.std())
@@ -330,10 +335,10 @@ print('Moran-W mean: ', W2_moran.mean(),
 
 expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
 residual_vector = an_adata_sample.obs['pearson_residual']  # shape: (n_spots,)
-spatial_corr_1 = spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W1, an_adata_sample.var_names)
-spatial_corr_2 = spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W2_geary, an_adata_sample.var_names)
-spatial_corr_3 = spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W2_moran, an_adata_sample.var_names)
-pearson_corr = pearson_correlation_with_residuals(expr_matrix, residual_vector, gene_names=an_adata_sample.var_names)
+spatial_corr_1 = fn.spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W1, an_adata_sample.var_names)
+spatial_corr_2 = fn.spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W2_geary, an_adata_sample.var_names)
+spatial_corr_3 = fn.spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W2_moran, an_adata_sample.var_names)
+pearson_corr = fn.pearson_correlation_with_residuals(expr_matrix, residual_vector, gene_names=an_adata_sample.var_names)
 
 corr_dict = {
     "Spatial_W1": spatial_corr_1,
@@ -362,28 +367,94 @@ for key, cor_df in corr_dict.items():
     top_genes[key] = cor_df.sort_values("correlation", ascending=True).head(1)[['ensemble_id','symbol', 'correlation']]
 top_genes
 
-def plot_gene_spatial(adata, gene_id, title, cmap="viridis"):
-    """Plot the expression of a single gene over spatial coordinates."""
-    if gene_id not in adata.var_names:
-        print(f"Gene {gene_id} not found in adata.var_names.")
-        return
-    gene_idx = adata.var_names.get_loc(gene_id)
-    expr = adata.X[:, gene_idx].toarray().flatten() if hasattr(adata.X, "toarray") else adata.X[:, gene_idx]
-    coords = adata.obsm["spatial"]
-    plt.figure(figsize=(5, 4))
-    plt.scatter(coords[:, 0], coords[:, 1], c=expr, cmap=cmap, s=10)
-    plt.title(title)
-    plt.axis("off")
-    plt.colorbar(label="Expression")
-    plt.tight_layout()
-    plt.show()
 
 
 for key, df in top_genes.items():
     print(f"Top 10 genes for {key}:")    # Plot the top gene spatially
     gene_ensemble_id = df['ensemble_id'].values[0]
-    plot_gene_spatial(an_adata_sample, gene_ensemble_id, title=f"Top Gene ({key}): {df['symbol'].values[0]}", cmap="viridis")
+    fn.plot_gene_spatial(an_adata_sample, gene_ensemble_id, title=f"Top Gene ({key}): {df['symbol'].values[0]}", cmap="viridis")
 
+
+
+# Calculate mean and standard deviation of correlations for each method
+for name, df in corr_dict.items():
+    cor_vals = df["correlation"].dropna()
+    mean_val = cor_vals.mean()
+    std_val = cor_vals.std()
+    print(f"{name}: mean = {mean_val:.4f}, std = {std_val:.4f}")
+    print(f"{name}: max = {cor_vals.max():.4f}, min = {cor_vals.min():.4f}")
+
+
+
+##### plot scatter plots of Pearson vs Spatially Weighted Correlations
+pearson_series = corr_dict["Pearson"]["correlation"]
+# Set up the plot
+fig, axs = plt.subplots(1, 3, figsize=(18, 5), sharex=True, sharey=True)
+spatial_methods = ["Spatial_W1", "Spatial_W2_Geary", "Spatial_W2_Moran"]
+for i, method in enumerate(spatial_methods):
+    spatial_series = corr_dict[method]["correlation"]
+    
+    # Align on gene index just in case
+    common_genes = pearson_series.index.intersection(spatial_series.index)
+    x = pearson_series.loc[common_genes]
+    y = spatial_series.loc[common_genes]
+
+    # Focus on genes with negative Pearson correlation
+    mask = x < 0
+    x = x[mask]
+    y = y[mask]
+    
+    axs[i].scatter(x, y, alpha=0.4, s=10)
+    axs[i].set_title(f"{method} vs Pearson")
+    axs[i].set_xlabel("Pearson Correlation")
+    axs[i].set_ylabel("Spatial Correlation")
+
+plt.suptitle("Pearson vs Spatially Weighted Correlations", fontsize=16)
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+plt.show()
+
+
+from functools import reduce
+
+# Step 1: Identify Pearson-high genes
+pearson_high = corr_dict["Pearson"].query("correlation > -0.5")["gene"]
+
+# Step 2: Collect genes with strong negative spatial correlation
+interesting_genes = set()
+for method in ["Spatial_W1", "Spatial_W2_Geary", "Spatial_W2_Moran"]:
+    spatial_low = corr_dict[method].query("correlation < -1")["gene"]
+    overlap = set(pearson_high).intersection(spatial_low)
+    interesting_genes.update(overlap)
+
+symbol_map = corr_dict["Pearson"].set_index("gene")["symbol"]
+symbol_df = symbol_map.loc[list(interesting_genes)].to_frame()
+
+# Step 3: Merge correlation values and gene symbols
+results = []
+for method, df in corr_dict.items():
+    filtered = df[df["gene"].isin(interesting_genes)].copy()
+    filtered = filtered.set_index("gene")[["correlation"]]
+    filtered.columns = [method]
+    results.append(filtered)
+
+# Add symbol (assuming it's consistent across all dict entries)
+symbol_map = corr_dict["Pearson"].set_index("gene")["symbol"]
+symbol_df = symbol_map.loc[list(interesting_genes)].to_frame()
+
+# Step 4: Combine all into a single DataFrame
+from functools import reduce
+merged = reduce(lambda left, right: left.join(right, how="outer"), results)
+merged = symbol_df.join(merged)
+
+# Step 5: Display all columns and rows
+pd.set_option("display.max_columns", None)
+pd.set_option("display.max_rows", None)
+merged.reset_index()
+
+merged['dif'] = merged['Spatial_W1'] - merged['Pearson']
+### sort by the difference
+merged_sorted = merged.sort_values(by='dif', ascending=True)
+merged_sorted
 
 
 ############### PLOT HEATMAP OF CORRELATIONS BETWEEN METHODS ######################
@@ -432,20 +503,39 @@ print(go_bp_results[['name', 'p_value', 'intersection_size']].sort_values('p_val
 #############################################
 
 
+NMF_loadings = adata_merged.uns["nmf_components"]
+NMF_loadings_df = pd.DataFrame(NMF_loadings,
+                               index=[f'NMF{i+1}' for i in range(NMF_loadings.shape[0])],
+                               columns=adata_merged.var_names)
 
-import squidpy as sq
-sq.gr.spatial_neighbors(adata, coord_type="generic", n_neighs=8)
-W = adata.obsp["spatial_connectivities"]
+NMF_loadings_df = NMF_loadings_df.T  # Transpose to have genes as rows
+gene_ensemble__map = fn.map_ensembl_to_symbol(NMF_loadings_df.index)
+NMF_loadings_df['symbol'] = NMF_loadings_df.index.map(gene_ensemble__map)
+factor_idx = 12
+NMF_loadings_df_sorted = NMF_loadings_df.sort_values(by=f'NMF{factor_idx+1}', ascending=False)
+print(f"Top 20 genes for NMF factor {factor_idx+1}:")
+print(NMF_loadings_df_sorted[['symbol', f'NMF{factor_idx+1}']].head(20).to_string(index=False))
+top_genes_nmf = NMF_loadings_df_sorted['symbol'].head(200).tolist()
 
-# Identifying genes assoiciated with the residuals
-for result in results:
-    expr_matrix = adata.X.toarray() if issparse(adata.X) else adata.X  # shape: (n_spots, n_genes)
-    pearson_residuals = result['pearson_residual']    # shape: (n_spots,)
-    coords = adata.obsm['spatial']   # shape: (n_spots, 2)
-    # Run the correlation
-    spatial_corr = fn.spatial_weighted_correlation_matrix(expr_matrix, pearson_residuals, 
-                                                          coords, mode="geary")
-    top_genes = spatial_corr.sort_values(ascending=False).head(30)
+gp = GProfiler(return_dataframe=True)
+enrich_results_nmf = gp.profile(organism='hsapiens', query=top_genes_nmf)
+enrich_results_nmf[['source', 'name', 'p_value', 'intersection_size']].head(10)
+# Filter GO:BP terms only
+go_bp_results_nmf = enrich_results_nmf[enrich_results_nmf['source'] == 'GO:BP']
+print(go_bp_results_nmf[['name', 'p_value', 'intersection_size']].sort_values('p_value').head(20))
+######################################################################
+
+
+### visaulize the top NMF loadings genes
+# Plot the top NMF loadings genes spatially
+df = NMF_loadings_df_sorted.head(10)
+for i in range(10):
+    gene_ensemble_id = df.index[i]
+    gene_symbol = df['symbol'].values[i]
+    fn.plot_gene_spatial(an_adata_sample, gene_ensemble_id, 
+                         title=gene_symbol, cmap="viridis")
+
+
 
 
 ## TODO: 
@@ -455,11 +545,11 @@ for result in results:
 # run HiDDEN on the residuals from 30NMF regressed out - is there any data leakage?
 
 
-from scipy.sparse import issparse
 
-if not issparse(expr_matrix):
-    from scipy.sparse import csr_matrix
-    expr_matrix = csr_matrix(expr_matrix)
+
+
+
+
 
 
 
