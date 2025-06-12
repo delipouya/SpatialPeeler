@@ -307,8 +307,8 @@ print(f"Factor {result['factor_index'] + 1}:")
 fn.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
     title_prefix="HiDDEN predictions", counter=factor_idx+1)
 
-
-sample_id_to_check = 5
+#4:7 are PSC samples, 0:3 are normal samples - initial analysis on sample #5
+sample_id_to_check = 4
 #sample_id_to_check = 1
 an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
 # Compute spatial weights using squidpy
@@ -346,6 +346,7 @@ corr_dict = {
     "Spatial_W2_Moran": spatial_corr_3,
     "Pearson": pearson_corr
 }
+
 for key, cor_df in corr_dict.items():
     # Ensure 'gene' column is present
     if 'gene' not in cor_df.columns:
@@ -362,19 +363,20 @@ for key, cor_df in corr_dict.items():
     corr_dict[key] = cor_df
 
 
+num_genes_viz = 10
 top_genes = {}
 for key, cor_df in corr_dict.items():
-    top_genes[key] = cor_df.sort_values("correlation", ascending=True).head(1)[['ensemble_id','symbol', 'correlation']]
+    top_genes[key] = cor_df.sort_values("correlation", ascending=True).head(num_genes_viz)[['ensemble_id','symbol', 'correlation']]
 top_genes
 
 
-
 for key, df in top_genes.items():
-    print(f"Top 10 genes for {key}:")    # Plot the top gene spatially
-    gene_ensemble_id = df['ensemble_id'].values[0]
-    fn.plot_gene_spatial(an_adata_sample, gene_ensemble_id, title=f"Top Gene ({key}): {df['symbol'].values[0]}", cmap="viridis")
-
-
+    for i in range(num_genes_viz):
+        gene_symbol = df['symbol'].values[i]
+        print(f"Top {i+1} gene for {key}: {gene_symbol}")
+        # Plot the spatial distribution of the top genes
+        fn.plot_gene_spatial(an_adata_sample, df['ensemble_id'].values[i], 
+                             title=f"{key} - {gene_symbol}", cmap="viridis")
 
 # Calculate mean and standard deviation of correlations for each method
 for name, df in corr_dict.items():
@@ -388,6 +390,16 @@ for name, df in corr_dict.items():
 
 ##### plot scatter plots of Pearson vs Spatially Weighted Correlations
 pearson_series = corr_dict["Pearson"]["correlation"]
+n_gene_pathway_thr = 20
+r_pathway_thr_pearson = pearson_series[:n_gene_pathway_thr].tail(1)
+
+
+##### plot scatter plots of Pearson vs Spatially Weighted Correlations
+spatial_series = corr_dict["Spatial_W1"]["correlation"]
+n_gene_pathway_thr = 20
+r_pathway_thr_spatial = spatial_series[:n_gene_pathway_thr].tail(1)
+
+
 # Set up the plot
 fig, axs = plt.subplots(1, 3, figsize=(18, 5), sharex=True, sharey=True)
 spatial_methods = ["Spatial_W1", "Spatial_W2_Geary", "Spatial_W2_Moran"]
@@ -399,6 +411,10 @@ for i, method in enumerate(spatial_methods):
     x = pearson_series.loc[common_genes]
     y = spatial_series.loc[common_genes]
 
+    ### add a vertical line at the threshold
+    axs[i].axvline(r_pathway_thr_pearson.values[0], color='red', linestyle='--', label='Pearson Pathway Threshold')
+    #### add a horizontal line at the spatial threshold
+    axs[i].axhline(r_pathway_thr_spatial.values[0], color='blue', linestyle='--', label='Spatial Pathway Threshold')
     # Focus on genes with negative Pearson correlation
     mask = x < 0
     x = x[mask]
@@ -413,12 +429,44 @@ plt.suptitle("Pearson vs Spatially Weighted Correlations", fontsize=16)
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
 
+method_name = 'Spatial_W1'  # or 'Spatial_W2_Geary', 'Spatial_W2_Moran' 'Pearson'
+spatial_top_genes = corr_dict[method_name]['ensemble_id'][:n_gene_pathway_thr]
+
+# Calculate average expression of the top genes across all samples
+average_expression = {}
+for sample_id, adata_sample in adata_by_sample.items():
+    expr_matrix = adata_sample.X.toarray() if sp.issparse(adata_sample.X) else adata_sample.X
+    top_gene_indices = [adata_sample.var_names.get_loc(gene) for gene in spatial_top_genes]
+    avg_expr = expr_matrix[:, top_gene_indices].mean(axis=0)
+    average_expression[sample_id] = avg_expr
+average_expression_df = pd.DataFrame(average_expression,
+                                        index=spatial_top_genes).T
+average_expression_df = average_expression_df.T
+print(average_expression_df.head())
+gene_ensemble_map = fn.map_ensembl_to_symbol(average_expression_df.index.tolist())
+average_expression_df['symbol'] = average_expression_df.index.map(gene_ensemble_map)
+### show as heatmap
+
+# Set up the heatmap
+plt.figure(figsize=(20, 10))
+sns.heatmap(average_expression_df.drop(columns='symbol'),
+            ## fix color map to be more readable: 0-4
+            vmin=0, vmax=4,  # Adjust these limits based on your data
+            cmap='viridis', annot=True, fmt=".02f",
+            cbar_kws={'label': 'Average Expression'},
+            xticklabels=average_expression_df.columns,
+            ### make font size smaller
+            yticklabels=average_expression_df['symbol'].values,
+            linewidths=.5, linecolor='black')
+plt.title("Average Expression of Top Spatial " + method_name +" Genes Across Samples")
+plt.xlabel("Samples")
+plt.ylabel("Genes")
+plt.tight_layout()
+
 
 from functools import reduce
-
 # Step 1: Identify Pearson-high genes
 pearson_high = corr_dict["Pearson"].query("correlation > -0.5")["gene"]
-
 # Step 2: Collect genes with strong negative spatial correlation
 interesting_genes = set()
 for method in ["Spatial_W1", "Spatial_W2_Geary", "Spatial_W2_Moran"]:
@@ -456,6 +504,15 @@ merged['dif'] = merged['Spatial_W1'] - merged['Pearson']
 merged_sorted = merged.sort_values(by='dif', ascending=True)
 merged_sorted
 
+### visualize the top 20 genes with the largest difference in a loop
+for i in range(20):
+    gene_symbol = merged_sorted['symbol'].values[i]
+    gene_ensemble_id = merged_sorted.index[i]
+    print(f"Top {i+1} gene: {gene_symbol} (Ensembl ID: {gene_ensemble_id})")
+    # Plot the spatial distribution of the top genes
+    fn.plot_gene_spatial(an_adata_sample, gene_ensemble_id, 
+                         title=f"{gene_symbol} (Ensembl ID: {gene_ensemble_id})", cmap="viridis")
+
 
 ############### PLOT HEATMAP OF CORRELATIONS BETWEEN METHODS ######################
 # Extract correlation values from each dataframe
@@ -490,7 +547,8 @@ cor_df = corr_dict['Spatial_W2_Geary']  # or any other method you want to use
 cor_df = corr_dict['Spatial_W2_Moran']  # or any other method you want to use
 cor_df = corr_dict['Pearson']  # or any other method you want to use
 
-top_genes = cor_df.dropna(subset=['symbol']).sort_values("correlation", ascending=True).head(200)["symbol"].tolist()
+num_pathway_genes = 800
+top_genes = cor_df.dropna(subset=['symbol']).sort_values("correlation", ascending=True).head(num_pathway_genes)["symbol"].tolist()
 # Run enrichment
 gp = GProfiler(return_dataframe=True)
 enrich_results = gp.profile(organism='hsapiens', query=top_genes)
@@ -536,23 +594,11 @@ for i in range(10):
                          title=gene_symbol, cmap="viridis")
 
 
-
-
 ## TODO: 
 # check the time it takes to run the correlation function
 # make a standard correlation function - spatially unaware
 # how to interpret the scatter plot of p_hat vs nmf scores
 # run HiDDEN on the residuals from 30NMF regressed out - is there any data leakage?
-
-
-
-
-
-
-
-
-
-
 
 
 
