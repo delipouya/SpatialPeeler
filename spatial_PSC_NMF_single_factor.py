@@ -34,6 +34,9 @@ from sklearn.cluster import KMeans
 from scipy.special import logit
 from scipy.sparse import issparse
 import functions as fn
+from functools import reduce
+from matplotlib_venn import venn3
+
 
 RAND_SEED = 28
 CASE_COND = 1
@@ -182,9 +185,45 @@ adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
 adata.obs['status'] = adata.obs['binary_label'].astype(int).values
 
 # Run factor-wise HiDDEN-like analysis (logistic regression on single factors)
-results = fn.single_factor_logistic_evaluation(
+results = single_factor_logistic_evaluation(
     adata, factor_key="X_pca", max_factors=optimal_num_pcs_ks
 )
+
+
+# Extract full model stats for each factor
+coef_list = [res['coef'] for res in results]
+intercept_list = [res['intercept'] for res in results]
+stderr_list = [res.get('std_err', None) for res in results]
+stderr_intercept_list = [res.get('std_err_intercept', None) for res in results]
+pval_list = [res.get('pval', None) for res in results]
+pval_intercept_list = [res.get('pval_intercept', None) for res in results]
+factor_index_list = [res['factor_index'] for res in results]
+
+# Build summary DataFrame
+coef_df = pd.DataFrame({
+    'factor': [f'Factor_{i+1}' for i in factor_index_list],
+    'coef': coef_list,
+    'intercept': intercept_list,
+    'std_err': stderr_list,
+    'std_err_intercept': stderr_intercept_list,
+    'pval': pval_list,
+    'pval_intercept': pval_intercept_list
+})
+coef_df_sorted = coef_df.sort_values(by='coef', ascending=False)
+coef_df_sorted
+
+### draw histogram of coefficients
+plt.figure(figsize=(10, 6))
+sns.histplot(coef_df['coef'], bins=30, kde=False, color='blue', stat='density')
+plt.title("Distribution of Coefficients Across Factors")
+plt.xlabel("Coefficient Value")
+plt.ylabel("Density")
+plt.axvline(x=200, color='red', linestyle='--', label='DAM - GOF')
+plt.axvline(x=-200, color='green', linestyle='--', label='DAM - LOF')
+plt.legend()
+plt.show()
+
+# Plot p-values for each factor
 
 ########################  VISUALIZATION  ########################
 for i in range(14,optimal_num_pcs_ks): #optimal_num_pcs_ks
@@ -207,6 +246,7 @@ for result in results:
     adata.obs['raw_residual'] = result['raw_residual']
     adata.obs['pearson_residual'] = result['pearson_residual']
     adata.obs['deviance_residual'] = result['deviance_residual']
+    
 
     # Copy adata per sample for plotting
     sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -285,7 +325,7 @@ for i in range(optimal_num_pcs_ks):
 ########################################################################
 ######################## Gene-Based analysis
 ########################################################################
-factor_idx = 12
+factor_idx = 2#12
 
 result = results[factor_idx] 
 adata.obs['p_hat'] = result['p_hat']
@@ -307,8 +347,8 @@ print(f"Factor {result['factor_index'] + 1}:")
 fn.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
     title_prefix="HiDDEN predictions", counter=factor_idx+1)
 
-#4:7 are PSC samples, 0:3 are normal samples - initial analysis on sample #5
-sample_id_to_check = 4
+#4:7 are PSC samples, 0:3 are normal samples - initial analysis on sample #5, 4
+sample_id_to_check = 5
 #sample_id_to_check = 1
 an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
 # Compute spatial weights using squidpy
@@ -390,20 +430,20 @@ for name, df in corr_dict.items():
 
 ##### plot scatter plots of Pearson vs Spatially Weighted Correlations
 pearson_series = corr_dict["Pearson"]["correlation"]
-n_gene_pathway_thr = 20
+n_gene_pathway_thr = 800
 r_pathway_thr_pearson = pearson_series[:n_gene_pathway_thr].tail(1)
 
-
+# Spatial_W2_Geary Spatial_W2_Moran Spatial_W1
 ##### plot scatter plots of Pearson vs Spatially Weighted Correlations
-spatial_series = corr_dict["Spatial_W1"]["correlation"]
-n_gene_pathway_thr = 20
+spatial_series = corr_dict["Spatial_W2_Geary"]["correlation"]
+n_gene_pathway_thr = 800
 r_pathway_thr_spatial = spatial_series[:n_gene_pathway_thr].tail(1)
-
 
 # Set up the plot
 fig, axs = plt.subplots(1, 3, figsize=(18, 5), sharex=True, sharey=True)
-spatial_methods = ["Spatial_W1", "Spatial_W2_Geary", "Spatial_W2_Moran"]
+spatial_methods = ["Spatial_W1","Spatial_W2_Geary", "Spatial_W2_Moran"]
 for i, method in enumerate(spatial_methods):
+
     spatial_series = corr_dict[method]["correlation"]
     
     # Align on gene index just in case
@@ -412,9 +452,11 @@ for i, method in enumerate(spatial_methods):
     y = spatial_series.loc[common_genes]
 
     ### add a vertical line at the threshold
-    axs[i].axvline(r_pathway_thr_pearson.values[0], color='red', linestyle='--', label='Pearson Pathway Threshold')
+    axs[i].axvline(r_pathway_thr_pearson.values[0], color='red', 
+                   linestyle='--', label='Pearson Pathway Threshold')
     #### add a horizontal line at the spatial threshold
-    axs[i].axhline(r_pathway_thr_spatial.values[0], color='blue', linestyle='--', label='Spatial Pathway Threshold')
+    axs[i].axhline(r_pathway_thr_spatial.values[0], color='blue', 
+                   linestyle='--', label='Spatial Pathway Threshold')
     # Focus on genes with negative Pearson correlation
     mask = x < 0
     x = x[mask]
@@ -429,7 +471,8 @@ plt.suptitle("Pearson vs Spatially Weighted Correlations", fontsize=16)
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
 
-method_name = 'Spatial_W1'  # or 'Spatial_W2_Geary', 'Spatial_W2_Moran' 'Pearson'
+n_gene_pathway_thr = 20
+method_name = 'Spatial_W1'  # or 'Spatial_W2_Geary', 'Spatial_W2_Moran' 'Pearson' Spatial_W1
 spatial_top_genes = corr_dict[method_name]['ensemble_id'][:n_gene_pathway_thr]
 
 # Calculate average expression of the top genes across all samples
@@ -462,9 +505,32 @@ plt.title("Average Expression of Top Spatial " + method_name +" Genes Across Sam
 plt.xlabel("Samples")
 plt.ylabel("Genes")
 plt.tight_layout()
+plt.show()
 
+# Create a Venn diagram
+n_gene_venn = 500
+genes_pearson = set(corr_dict['Pearson']["gene"][:n_gene_venn])
+genes_w1 = set(corr_dict["Spatial_W1"]["gene"][:n_gene_venn])
+genes_w2_geary = set(corr_dict["Spatial_W2_Geary"]["gene"][:n_gene_venn])
+genes_w2_moran = set(corr_dict["Spatial_W2_Moran"]["gene"][:n_gene_venn])
 
-from functools import reduce
+# Plotting two Venn diagrams due to 3-set limitation
+fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+
+# First Venn Diagram: Pearson, W1, W2_Geary
+venn3([genes_pearson, genes_w1, genes_w2_geary],
+    set_labels=("Pearson", "Spatial_W1", "Spatial_W2_Geary"),
+    ax=axes[0])
+axes[0].set_title("Pearson vs W1 vs W2_Geary")
+
+# Second Venn Diagram: Pearson, W2_Geary, W2_Moran
+venn3([genes_pearson, genes_w2_geary, genes_w2_moran],
+    set_labels=("Pearson", "Spatial_W2_Geary", "Spatial_W2_Moran"),
+    ax=axes[1])
+axes[1].set_title("Pearson vs W2_Geary vs W2_Moran")
+plt.tight_layout()
+plt.show()
+
 # Step 1: Identify Pearson-high genes
 pearson_high = corr_dict["Pearson"].query("correlation > -0.5")["gene"]
 # Step 2: Collect genes with strong negative spatial correlation
@@ -595,12 +661,7 @@ for i in range(10):
 
 
 ## TODO: 
-# check the time it takes to run the correlation function
-# make a standard correlation function - spatially unaware
-# how to interpret the scatter plot of p_hat vs nmf scores
 # run HiDDEN on the residuals from 30NMF regressed out - is there any data leakage?
-
-
 
 
 ######################################################################
