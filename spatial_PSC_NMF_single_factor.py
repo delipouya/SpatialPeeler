@@ -185,10 +185,9 @@ adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
 adata.obs['status'] = adata.obs['binary_label'].astype(int).values
 
 # Run factor-wise HiDDEN-like analysis (logistic regression on single factors)
-results = single_factor_logistic_evaluation(
+results = fn.single_factor_logistic_evaluation(
     adata, factor_key="X_pca", max_factors=optimal_num_pcs_ks
 )
-
 
 # Extract full model stats for each factor
 coef_list = [res['coef'] for res in results]
@@ -223,7 +222,6 @@ plt.axvline(x=-200, color='green', linestyle='--', label='DAM - LOF')
 plt.legend()
 plt.show()
 
-# Plot p-values for each factor
 
 ########################  VISUALIZATION  ########################
 for i in range(14,optimal_num_pcs_ks): #optimal_num_pcs_ks
@@ -325,7 +323,7 @@ for i in range(optimal_num_pcs_ks):
 ########################################################################
 ######################## Gene-Based analysis
 ########################################################################
-factor_idx = 2#12
+factor_idx = 12#8 #12
 
 result = results[factor_idx] 
 adata.obs['p_hat'] = result['p_hat']
@@ -333,7 +331,6 @@ adata.obs['p_hat'] = adata.obs['p_hat'].astype('float32')
 adata.obs['raw_residual'] = result['raw_residual']
 adata.obs['pearson_residual'] = result['pearson_residual']
 adata.obs['deviance_residual'] = result['deviance_residual']
-
 
 # Copy adata per sample for plotting
 sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -360,7 +357,6 @@ sq.gr.spatial_neighbors(an_adata_sample, coord_type="generic", n_neighs=10) ####
 W1 = an_adata_sample.obsp["spatial_connectivities"]
 W1_array = np.array(W1.todense())  # if W1 is sparse, convert to dense matrix
 
-
 ##### calculating spatial weights using custom function
 coords = an_adata_sample.obsm['spatial']  # shape: (n_spots, 2)
 W2_geary = fn.compute_spatial_weights(coords, k=10, mode="geary")
@@ -375,16 +371,57 @@ print('Moran-W mean: ', W2_moran.mean(),
 
 expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
 residual_vector = an_adata_sample.obs['pearson_residual']  # shape: (n_spots,)
-spatial_corr_1 = fn.spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W1, an_adata_sample.var_names)
-spatial_corr_2 = fn.spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W2_geary, an_adata_sample.var_names)
-spatial_corr_3 = fn.spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W2_moran, an_adata_sample.var_names)
-pearson_corr = fn.pearson_correlation_with_residuals(expr_matrix, residual_vector, gene_names=an_adata_sample.var_names)
+
+spatial_corr_1 = fn.spatial_weighted_correlation_matrix(expr_matrix, residual_vector, 
+                                                        W1, an_adata_sample.var_names)
+spatial_corr_2 = fn.spatial_weighted_correlation_matrix(expr_matrix, residual_vector, 
+                                                        W2_geary, an_adata_sample.var_names)
+spatial_corr_3 = fn.spatial_weighted_correlation_matrix(expr_matrix, residual_vector, 
+                                                        W2_moran, an_adata_sample.var_names)
+pearson_corr = fn.pearson_correlation_with_residuals(expr_matrix, residual_vector, 
+                                                     gene_names=an_adata_sample.var_names)
+
+regression_res = fn.regression_with_residuals(expr_matrix, residual_vector,
+                                               gene_names=an_adata_sample.var_names)
+regression_corr = pd.DataFrame({
+        "gene": regression_res["gene"],
+        "correlation": regression_res["slope"]})
+
+regression_corr.sort_values("correlation", ascending=True, inplace=True)
+raw_reg_thr = regression_corr['correlation'].head(200).tail(1).values[0]
+
+
+# Example usage on real data:
+import scipy.sparse
+
+coords = an_adata_sample.obsm["spatial"]  # shape (n_cells, 2)
+gene_names = an_adata_sample.var_names.to_numpy()
+gp_results = fn.fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names)
+
+
+
+### make a histogram of the regression coefficients
+plt.figure(figsize=(10, 6))
+sns.histplot(regression_corr['correlation'], bins=30, 
+             kde=False, color='blue', stat='density')
+plt.title("Distribution of Regression Coefficients")
+plt.xlabel("Regression Coefficient Value")
+plt.ylabel("Density")
+plt.axvline(x=0, color='red', linestyle='--', label='Zero Line')
+plt.legend()
+plt.show()
+
+### scale regression correlation values to be between -1 and 1
+regression_corr['correlation'] = (regression_corr['correlation'] - regression_corr['correlation'].min()) / \
+    (regression_corr['correlation'].max() - regression_corr['correlation'].min()) * 2 - 1
+
 
 corr_dict = {
     "Spatial_W1": spatial_corr_1,
     "Spatial_W2_Geary": spatial_corr_2,
     "Spatial_W2_Moran": spatial_corr_3,
-    "Pearson": pearson_corr
+    "Pearson": pearson_corr,
+    "Regression": regression_corr
 }
 
 for key, cor_df in corr_dict.items():
@@ -430,17 +467,17 @@ for name, df in corr_dict.items():
 
 ##### plot scatter plots of Pearson vs Spatially Weighted Correlations
 pearson_series = corr_dict["Pearson"]["correlation"]
-n_gene_pathway_thr = 800
+n_gene_pathway_thr = 200
 r_pathway_thr_pearson = pearson_series[:n_gene_pathway_thr].tail(1)
 
 # Spatial_W2_Geary Spatial_W2_Moran Spatial_W1
 ##### plot scatter plots of Pearson vs Spatially Weighted Correlations
 spatial_series = corr_dict["Spatial_W2_Geary"]["correlation"]
-n_gene_pathway_thr = 800
+n_gene_pathway_thr = 200
 r_pathway_thr_spatial = spatial_series[:n_gene_pathway_thr].tail(1)
 
 # Set up the plot
-fig, axs = plt.subplots(1, 3, figsize=(18, 5), sharex=True, sharey=True)
+fig, axs = plt.subplots(1, 3, figsize=(22, 7), sharex=True, sharey=True)
 spatial_methods = ["Spatial_W1","Spatial_W2_Geary", "Spatial_W2_Moran"]
 for i, method in enumerate(spatial_methods):
 
@@ -471,8 +508,35 @@ plt.suptitle("Pearson vs Spatially Weighted Correlations", fontsize=16)
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
 
+### scatter plot of Pearson vs Regression Correlation
+pearson_series = corr_dict["Pearson"]["correlation"]
+regression_series = regression_res["slope"]
+## sort by value of reg and find the 200 value 
+n_gene_pathway_thr = 200
+r_pathway_thr_pearson = pearson_series[:n_gene_pathway_thr].tail(1)
+r_pathway_thr_regression = raw_reg_thr
+
+# Align on gene index just in case
+common_genes = pearson_series.index.intersection(regression_series.index)
+x = pearson_series.loc[common_genes]
+y = regression_series.loc[common_genes] 
+# Set up the plot
+plt.figure(figsize=(8, 6))
+plt.scatter(x, y, alpha=0.4, s=10)
+plt.axvline(r_pathway_thr_pearson.values[0], color='red',
+            linestyle='--', label='Pearson')
+plt.axhline(r_pathway_thr_regression, color='blue',
+            linestyle='--', label='Regression')
+plt.title("Pearson vs Regression Correlation")
+plt.xlabel("Pearson Correlation")
+plt.ylabel("Regression Correlation")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
 n_gene_pathway_thr = 20
-method_name = 'Spatial_W1'  # or 'Spatial_W2_Geary', 'Spatial_W2_Moran' 'Pearson' Spatial_W1
+method_name = 'Regression'  # or 'Spatial_W2_Geary', 'Spatial_W2_Moran' 'Pearson' Spatial_W1
 spatial_top_genes = corr_dict[method_name]['ensemble_id'][:n_gene_pathway_thr]
 
 # Calculate average expression of the top genes across all samples
@@ -501,21 +565,23 @@ sns.heatmap(average_expression_df.drop(columns='symbol'),
             ### make font size smaller
             yticklabels=average_expression_df['symbol'].values,
             linewidths=.5, linecolor='black')
-plt.title("Average Expression of Top Spatial " + method_name +" Genes Across Samples")
+plt.title("Average Expression of Top Spatial " + method_name +
+          " Genes Across Samples")
 plt.xlabel("Samples")
 plt.ylabel("Genes")
 plt.tight_layout()
 plt.show()
 
 # Create a Venn diagram
-n_gene_venn = 500
+n_gene_venn = 50
 genes_pearson = set(corr_dict['Pearson']["gene"][:n_gene_venn])
 genes_w1 = set(corr_dict["Spatial_W1"]["gene"][:n_gene_venn])
 genes_w2_geary = set(corr_dict["Spatial_W2_Geary"]["gene"][:n_gene_venn])
 genes_w2_moran = set(corr_dict["Spatial_W2_Moran"]["gene"][:n_gene_venn])
+genes_regression = set(corr_dict["Regression"]["gene"][:n_gene_venn])
 
 # Plotting two Venn diagrams due to 3-set limitation
-fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+fig, axes = plt.subplots(1, 3, figsize=(20, 10))
 
 # First Venn Diagram: Pearson, W1, W2_Geary
 venn3([genes_pearson, genes_w1, genes_w2_geary],
@@ -528,6 +594,13 @@ venn3([genes_pearson, genes_w2_geary, genes_w2_moran],
     set_labels=("Pearson", "Spatial_W2_Geary", "Spatial_W2_Moran"),
     ax=axes[1])
 axes[1].set_title("Pearson vs W2_Geary vs W2_Moran")
+
+# Third Venn Diagram: Pearson, Regression, W2_Moran
+venn3([genes_pearson, genes_regression, genes_w2_moran],
+    set_labels=("Pearson", "Regression", "Spatial_W2_Moran"),
+    ax=axes[2])
+axes[2].set_title("Pearson vs Regression vs W2_Moran")
+plt.suptitle("Venn Diagrams of Top Genes Across Methods", fontsize=16)
 plt.tight_layout()
 plt.show()
 

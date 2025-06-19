@@ -199,8 +199,7 @@ def single_factor_logistic_evaluation(adata, factor_key="X_nmf", max_factors=30)
             -2 * (y * np.log(p_hat) + (1 - y) * np.log(1 - p_hat))
         )
 
-        # Save everything
-        
+        # Save the results
         result = {
             "factor_index": i,
             "coef": float(coef[1]),                    # β (slope)
@@ -357,7 +356,8 @@ def plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
 
 
 
-def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter, from_obsm=False, factor_idx=None):
+def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter, 
+              from_obsm=False, factor_idx=None):
     """
     Plots a spatial grid of values from .obs or .obsm with consistent NMF-style coloring.
     
@@ -458,6 +458,107 @@ def pearson_correlation_with_residuals(expr_matrix, residual_vector, gene_names)
         "gene": gene_names,
         "correlation": correlations
     })
+
+
+from statsmodels.api import OLS, add_constant
+
+
+def regression_with_residuals(expr_matrix, residual_vector, gene_names):
+    """
+    Fit univariate linear regression of residual_vector ~ gene_expression for each gene.
+
+    Parameters
+    ----------
+    expr_matrix : np.ndarray (n_cells, n_genes)
+        Gene expression matrix.
+    residual_vector : np.ndarray (n_cells,)
+        Residuals (e.g., from logistic regression).
+    gene_names : list or np.ndarray
+        List of gene names corresponding to columns of expr_matrix.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'gene', 'slope', 'pval', and 'r_squared' columns.
+    """
+    slopes = []
+    pvals = []
+    r_squared = []
+
+    for g in range(expr_matrix.shape[1]):
+        x = expr_matrix[:, g]
+        if np.std(x) == 0 or np.std(residual_vector) == 0:
+            slopes.append(np.nan)
+            pvals.append(np.nan)
+            r_squared.append(np.nan)
+            continue
+
+        X = add_constant(x)
+        model = OLS(residual_vector, X).fit()
+
+        slopes.append(model.params[1])        # β₁
+        pvals.append(model.pvalues[1])        # p-value for β₁
+        r_squared.append(model.rsquared)      # goodness of fit
+
+    return pd.DataFrame({
+        "gene": gene_names,
+        "slope": slopes,
+        "pval": pvals,
+        "r_squared": r_squared
+    })
+
+
+import numpy as np
+import pandas as pd
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF, WhiteKernel
+from scipy.stats import pearsonr
+
+
+def fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names, kernel=None):
+    """
+    Fit a GP to the residuals and a GP to each gene expression vector, compare spatial similarity.
+
+    Parameters
+    ----------
+    expr_matrix : np.ndarray (n_cells, n_genes)
+        Gene expression matrix.
+    residual_vector : np.ndarray (n_cells,)
+        Residuals from a model (e.g., Pearson residuals).
+    coords : np.ndarray (n_cells, 2)
+        Spatial coordinates (e.g., adata.obsm["spatial"]).
+    gene_names : list or np.ndarray
+        Gene names.
+    kernel : sklearn GP kernel (optional)
+        If None, uses RBF + WhiteKernel by default.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'gene' and 'similarity_to_residual_GP'.
+    """
+    if kernel is None:
+        kernel = 1.0 * RBF(length_scale=2.0) + WhiteKernel(noise_level=0.1)
+
+    # Fit GP to residuals
+    gp_r = GaussianProcessRegressor(kernel=kernel, alpha=1e-4, normalize_y=True)
+    gp_r.fit(coords, residual_vector)
+    residual_gp_mean = gp_r.predict(coords)
+
+    # Fit GP to each gene and compute correlation with residual GP
+    similarity_scores = []
+    for g in range(expr_matrix.shape[1]):
+        gp_g = GaussianProcessRegressor(kernel=kernel, alpha=1e-4, normalize_y=True)
+        gp_g.fit(coords, expr_matrix[:, g])
+        gene_gp_mean = gp_g.predict(coords)
+
+        corr, _ = pearsonr(gene_gp_mean, residual_gp_mean)
+        similarity_scores.append(corr)
+
+    return pd.DataFrame({
+        "gene": gene_names,
+        "similarity_to_residual_GP": similarity_scores
+    }).sort_values(by="similarity_to_residual_GP", ascending=False)
 
 
 
