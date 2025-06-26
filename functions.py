@@ -461,9 +461,9 @@ def pearson_correlation_with_residuals(expr_matrix, residual_vector, gene_names)
 
 
 from statsmodels.api import OLS, add_constant
+from scipy.stats import zscore
 
-
-def regression_with_residuals(expr_matrix, residual_vector, gene_names):
+def regression_with_residuals(expr_matrix, residual_vector, gene_names, scale=True):
     """
     Fit univariate linear regression of residual_vector ~ gene_expression for each gene.
 
@@ -475,6 +475,8 @@ def regression_with_residuals(expr_matrix, residual_vector, gene_names):
         Residuals (e.g., from logistic regression).
     gene_names : list or np.ndarray
         List of gene names corresponding to columns of expr_matrix.
+    scale : bool
+        Whether to z-score scale both gene expression and residuals before regression.
 
     Returns
     -------
@@ -487,6 +489,13 @@ def regression_with_residuals(expr_matrix, residual_vector, gene_names):
 
     for g in range(expr_matrix.shape[1]):
         x = expr_matrix[:, g]
+        if scale:
+            # Scale both gene expression and residuals
+            x = zscore(x)
+            residual_vector = zscore(residual_vector)
+
+        # Fit OLS regression
+        
         if np.std(x) == 0 or np.std(residual_vector) == 0:
             slopes.append(np.nan)
             pvals.append(np.nan)
@@ -515,7 +524,8 @@ from sklearn.gaussian_process.kernels import RBF, WhiteKernel
 from scipy.stats import pearsonr
 
 
-def fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names, kernel=None):
+def fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names, 
+                             kernel=None):
     """
     Fit a GP to the residuals and a GP to each gene expression vector, compare spatial similarity.
 
@@ -548,8 +558,10 @@ def fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names, k
     # Fit GP to each gene and compute correlation with residual GP
     similarity_scores = []
     for g in range(expr_matrix.shape[1]):
-        gp_g = GaussianProcessRegressor(kernel=kernel, alpha=1e-4, normalize_y=True)
-        gp_g.fit(coords, expr_matrix[:, g])
+        
+        # Use hyperparameter optimization for each gene (optimizer='fmin_l_bfgs')
+        gp_g = GaussianProcessRegressor(kernel=kernel, alpha=1e-4, normalize_y=True)    
+        gp_g.fit(coords, expr_matrix[:, g]) ### re-fit for each gene - O(n_cells^3)
         gene_gp_mean = gp_g.predict(coords)
 
         corr, _ = pearsonr(gene_gp_mean, residual_gp_mean)
@@ -559,6 +571,68 @@ def fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names, k
         "gene": gene_names,
         "similarity_to_residual_GP": similarity_scores
     }).sort_values(by="similarity_to_residual_GP", ascending=False)
+
+
+from joblib import Parallel, delayed
+def fit_gp_similarity_scores_fastmode(expr_matrix, residual_vector, coords, gene_names, 
+                             kernel=None, hyperopt=True, n_jobs=1):
+    """
+    Fit a GP to the residuals and a GP to each gene expression vector, compare spatial similarity.
+
+    Parameters
+    ----------
+    expr_matrix : np.ndarray (n_cells, n_genes)
+        Gene expression matrix.
+    residual_vector : np.ndarray (n_cells,)
+        Residuals from a model (e.g., Pearson residuals).
+    coords : np.ndarray (n_cells, 2)
+        Spatial coordinates (e.g., adata.obsm["spatial"]).
+    gene_names : list or np.ndarray
+        Gene names.
+    kernel : sklearn GP kernel (optional)
+        If None, uses RBF + WhiteKernel by default.
+    hyperopt : bool
+        Whether to optimize hyperparameters for each gene-specific GP.
+    n_jobs : int
+        Number of parallel jobs for per-gene GP fitting. Set >1 for parallelization.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'gene' and 'similarity_to_residual_GP'.
+    """
+    if kernel is None:
+        kernel = 1.0 * RBF(length_scale=2.0) + WhiteKernel(noise_level=0.1)
+
+    #  Fit GP to residuals 
+    gp_r = GaussianProcessRegressor(kernel=kernel, alpha=1e-4, normalize_y=True)
+    gp_r.fit(coords, residual_vector)
+    residual_gp_mean = gp_r.predict(coords)
+
+    # If not hyperopting, extract the kernel after residual fit (re-using for all genes)
+    fitted_kernel = gp_r.kernel_ if not hyperopt else kernel
+
+    # Define function for per-gene GP 
+    def fit_and_score_gene(g):
+        y = expr_matrix[:, g]
+        if hyperopt:
+            gp_g = GaussianProcessRegressor(kernel=kernel, alpha=1e-4, normalize_y=True)
+        else:
+            gp_g = GaussianProcessRegressor(kernel=fitted_kernel, optimizer=None, 
+                                            alpha=1e-4, normalize_y=True)
+        gp_g.fit(coords, y)
+        gene_gp_mean = gp_g.predict(coords)
+        corr, _ = pearsonr(gene_gp_mean, residual_gp_mean)
+        return gene_names[g], corr
+
+    # Run in parallel 
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(fit_and_score_gene)(g) for g in range(expr_matrix.shape[1])
+    )
+
+    return pd.DataFrame(results, columns=["gene", "similarity_to_residual_GP"])\
+             .sort_values(by="similarity_to_residual_GP", ascending=False)
+
 
 
 

@@ -383,22 +383,15 @@ pearson_corr = fn.pearson_correlation_with_residuals(expr_matrix, residual_vecto
 
 regression_res = fn.regression_with_residuals(expr_matrix, residual_vector,
                                                gene_names=an_adata_sample.var_names)
+
+regression_res = regression_with_residuals(expr_matrix, residual_vector,
+                                               gene_names=an_adata_sample.var_names, scale=True)
 regression_corr = pd.DataFrame({
         "gene": regression_res["gene"],
         "correlation": regression_res["slope"]})
 
 regression_corr.sort_values("correlation", ascending=True, inplace=True)
 raw_reg_thr = regression_corr['correlation'].head(200).tail(1).values[0]
-
-
-# Example usage on real data:
-import scipy.sparse
-
-coords = an_adata_sample.obsm["spatial"]  # shape (n_cells, 2)
-gene_names = an_adata_sample.var_names.to_numpy()
-gp_results = fn.fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names)
-
-
 
 ### make a histogram of the regression coefficients
 plt.figure(figsize=(10, 6))
@@ -411,9 +404,62 @@ plt.axvline(x=0, color='red', linestyle='--', label='Zero Line')
 plt.legend()
 plt.show()
 
-### scale regression correlation values to be between -1 and 1
-regression_corr['correlation'] = (regression_corr['correlation'] - regression_corr['correlation'].min()) / \
-    (regression_corr['correlation'].max() - regression_corr['correlation'].min()) * 2 - 1
+
+# Example usage on real data:
+import scipy.sparse
+coords = an_adata_sample.obsm["spatial"]  # shape (n_cells, 2)
+gene_names = an_adata_sample.var_names.to_numpy()
+
+gp_results = fn.fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names)
+
+import time
+import multiprocessing
+n_cores = multiprocessing.cpu_count()
+n_jobs = max(1, int(n_cores * 0.5))  # Use ~50% of logical cores
+ #(O(n³) time and O(n²) memory per job)
+
+start_time = time.time() ### TODO: add printing progress to the function later
+gp_results = fn.fit_gp_similarity_scores_fastmode(expr_matrix, 
+                                                  residual_vector, coords, gene_names, 
+                                                  n_jobs=n_jobs, hyperopt=False)
+
+end_time = time.time()
+elapsed_time = end_time - start_time
+print(f"Total runtime: {elapsed_time/60:.2f} minutes")
+### save GP results to a DataFrame csv file
+gp_results_df = pd.DataFrame({
+    "gene": gp_results["gene"],
+    "gp_similarity": gp_results["similarity_to_residual_GP"],
+})
+gp_results_df.sort_values("gp_similarity", ascending=True, inplace=True)
+#gp_results_df.to_csv(os.path.join(root_path, 'SpatialPeeler',
+#                             'data_PSC', 'gp_similarity_scores.csv'), index=False)
+
+gp_regression_corr = pd.DataFrame({
+    "gene": gp_results["gene"],
+    "correlation": gp_results["similarity_to_residual_GP"]
+})
+gp_regression_corr.sort_values("correlation", ascending=True, inplace=True)
+
+gp_regression_corr['ensemble_id'] = gp_regression_corr['gene']
+gp_regression_corr['symbol'] = gp_regression_corr['gene'].map(
+    fn.map_ensembl_to_symbol(gp_regression_corr['gene'].tolist()))
+
+
+gp_regression_corr
+
+### make a histogram of the regression coefficients
+plt.figure(figsize=(10, 6))
+sns.histplot(gp_regression_corr['correlation'], bins=30, 
+             kde=False, color='blue', stat='density')
+plt.title("Distribution of Regression Coefficients")
+plt.xlabel("GP Regression Correlation Value")
+plt.ylabel("Density")
+plt.axvline(x=0, color='red', linestyle='--', label='Zero Line')
+plt.legend()
+plt.show()
+
+
 
 
 corr_dict = {
@@ -421,7 +467,8 @@ corr_dict = {
     "Spatial_W2_Geary": spatial_corr_2,
     "Spatial_W2_Moran": spatial_corr_3,
     "Pearson": pearson_corr,
-    "Regression": regression_corr
+    "Regression": regression_corr,
+    "GP_Regression": gp_regression_corr
 }
 
 for key, cor_df in corr_dict.items():
@@ -462,6 +509,29 @@ for name, df in corr_dict.items():
     std_val = cor_vals.std()
     print(f"{name}: mean = {mean_val:.4f}, std = {std_val:.4f}")
     print(f"{name}: max = {cor_vals.max():.4f}, min = {cor_vals.min():.4f}")
+
+
+##### plot scatter plots of Regression vs GP_regression Correlations
+regression_series = corr_dict["Regression"]["correlation"]
+
+pearson_series = corr_dict["Pearson"]["correlation"]
+gp_series = corr_dict["GP_Regression"]["correlation"]
+
+### check if correlation values of the two methods are equivalent
+if not regression_series.index.equals(gp_series.index):
+    print("Warning: Regression and GP Regression indices do not match. Aligning on gene index.")
+
+# Align on gene index just in case
+x = regression_series #
+y = gp_series
+# Set up the plot
+plt.figure(figsize=(8, 6))
+plt.scatter(x, y, alpha=0.4, s=10)
+plt.xlabel("regression Correlation")
+plt.ylabel("GP Regression Correlation")
+plt.tight_layout()
+plt.legend()
+plt.show()
 
 
 
