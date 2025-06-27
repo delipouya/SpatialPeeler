@@ -223,6 +223,26 @@ plt.legend()
 plt.show()
 
 
+factor_id = 24
+results[factor_id]['p_hat']  # p_hat for the first factor
+adata_merged.obs['disease']
+### create a dataframe 
+df_p_hat = pd.DataFrame({
+    'disease': adata_merged.obs['disease'],
+    'sample_id': adata_merged.obs['sample_id'],
+    'p_hat': results[factor_id]['p_hat'],
+    'pearson_residual': results[factor_id]['pearson_residual'],
+    'raw_residual': resutls[factor_id]['raw_residual'],
+
+})
+plt.figure(figsize=(10, 10))
+sns.violinplot(y="p_hat", x="disease",  
+               data=df_p_hat, inner="box", palette="Set2")
+plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
+
+
 ########################  VISUALIZATION  ########################
 for i in range(14,optimal_num_pcs_ks): #optimal_num_pcs_ks
     fn.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)

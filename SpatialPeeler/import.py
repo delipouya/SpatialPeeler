@@ -2,6 +2,29 @@ import os
 import pandas as pd
 import anndata
 from scipy import io
+import os
+import sys
+root_path = os.path.abspath('./..')
+sys.path.insert(0, root_path)
+import pandas as pd
+import numpy as np
+import hiddensc
+from hiddensc import utils, files, vis
+import scanpy as sc
+import scvi
+import anndata
+from sklearn.exceptions import ConvergenceWarning
+import warnings
+warnings.simplefilter("ignore", category=ConvergenceWarning)
+
+
+RAND_SEED = 28
+CASE_COND = 1
+np.random.seed(RAND_SEED)
+utils.set_random_seed(utils.RANDOM_SEED)
+utils.print_module_versions([sc, anndata, scvi, hiddensc])
+vis.visual_settings()
+
 
 
 def load_slide_seq_puck(puck_dir, puck_id):
@@ -34,12 +57,14 @@ def load_slide_seq_puck(puck_dir, puck_id):
     barcodes = pd.read_csv(barcodes_path, header=None, sep='\t')
     cell_barcodes = barcodes.iloc[:, 0].values
 
-    adata = anndata.AnnData(X=X)
+    adata = anndata.AnnData(X=X.T)
     adata.var_names = gene_names
     adata.obs_names = [f"{puck_id}_{bc}" for bc in cell_barcodes]
     adata.obs['puck_id'] = puck_id
 
     return adata
+
+
 
 def load_all_slide_seq_data(root_dir):
     """
@@ -67,6 +92,3 @@ def load_all_slide_seq_data(root_dir):
     )
 
     return adata_merged
-
-root_dir = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq'
-adata_merged = load_all_slide_seq_data(root_dir)
