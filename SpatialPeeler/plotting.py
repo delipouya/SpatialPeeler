@@ -167,7 +167,7 @@ def plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
 
 
 
-def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter, 
+def plot_grid_cliped(adata_by_sample, sample_ids, key, title_prefix, counter, 
               from_obsm=False, factor_idx=None):
     """
     Plots a spatial grid of values from .obs or .obsm with consistent NMF-style coloring.
