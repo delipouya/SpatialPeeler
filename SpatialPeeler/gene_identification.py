@@ -37,16 +37,16 @@ from sklearn.gaussian_process.kernels import RBF, WhiteKernel
 from scipy.stats import pearsonr
 
 
-def pearson_correlation_with_residuals(expr_matrix, residual_vector, gene_names):
+def pearson_correlation_with_pattern(expr_matrix, pattern_vector, gene_names):
     """
-    Compute standard Pearson correlation between each gene and residuals.
+    Compute standard Pearson correlation between each gene and pattern score.
 
     Parameters
     ----------
     expr_matrix : np.ndarray (n_cells, n_genes)
         Gene expression matrix.
-    residual_vector : np.ndarray (n_cells,)
-        Residuals to correlate with each gene (e.g., pearson or raw).
+    pattern_vector : np.ndarray (n_cells,)
+        pattern score to correlate with each gene (e.g., pearson or raw).
     gene_names : list or np.ndarray
         List of gene names corresponding to columns of expr_matrix.
 
@@ -58,10 +58,10 @@ def pearson_correlation_with_residuals(expr_matrix, residual_vector, gene_names)
     correlations = []
     for g in range(expr_matrix.shape[1]):
         x = expr_matrix[:, g]
-        if np.std(x) == 0 or np.std(residual_vector) == 0:
+        if np.std(x) == 0 or np.std(pattern_vector) == 0:
             correlations.append(np.nan)
         else:
-            r, _ = pearsonr(x, residual_vector)
+            r, _ = pearsonr(x, pattern_vector)
             correlations.append(r)
 
     return pd.DataFrame({
@@ -72,20 +72,20 @@ def pearson_correlation_with_residuals(expr_matrix, residual_vector, gene_names)
 
 
 
-def regression_with_residuals(expr_matrix, residual_vector, gene_names, scale=True):
+def regression_with_pattern(expr_matrix, pattern_vector, gene_names, scale=True):
     """
-    Fit univariate linear regression of residual_vector ~ gene_expression for each gene.
+    Fit univariate linear regression of pattern_vector ~ gene_expression for each gene.
 
     Parameters
     ----------
     expr_matrix : np.ndarray (n_cells, n_genes)
         Gene expression matrix.
-    residual_vector : np.ndarray (n_cells,)
-        Residuals (e.g., from logistic regression).
+    pattern_vector : np.ndarray (n_cells,)
+        pattern score (e.g., from logistic regression).
     gene_names : list or np.ndarray
         List of gene names corresponding to columns of expr_matrix.
     scale : bool
-        Whether to z-score scale both gene expression and residuals before regression.
+        Whether to z-score scale both gene expression and pattern score before regression.
 
     Returns
     -------
@@ -99,20 +99,20 @@ def regression_with_residuals(expr_matrix, residual_vector, gene_names, scale=Tr
     for g in range(expr_matrix.shape[1]):
         x = expr_matrix[:, g]
         if scale:
-            # Scale both gene expression and residuals
+            # Scale both gene expression and pattern score
             x = zscore(x)
-            residual_vector = zscore(residual_vector)
+            pattern_vector = zscore(pattern_vector)
 
         # Fit OLS regression
         
-        if np.std(x) == 0 or np.std(residual_vector) == 0:
+        if np.std(x) == 0 or np.std(pattern_vector) == 0:
             slopes.append(np.nan)
             pvals.append(np.nan)
             r_squared.append(np.nan)
             continue
 
         X = add_constant(x)
-        model = OLS(residual_vector, X).fit()
+        model = OLS(pattern_vector, X).fit()
 
         slopes.append(model.params[1])        # β₁
         pvals.append(model.pvalues[1])        # p-value for β₁
@@ -127,17 +127,17 @@ def regression_with_residuals(expr_matrix, residual_vector, gene_names, scale=Tr
 
 
 
-def fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names, 
+def fit_gp_similarity_scores(expr_matrix, pattern_vector, coords, gene_names, 
                              kernel=None):
     """
-    Fit a GP to the residuals and a GP to each gene expression vector, compare spatial similarity.
+    Fit a GP to the pattern score and a GP to each gene expression vector, compare spatial similarity.
 
     Parameters
     ----------
     expr_matrix : np.ndarray (n_cells, n_genes)
         Gene expression matrix.
-    residual_vector : np.ndarray (n_cells,)
-        Residuals from a model (e.g., Pearson residuals).
+    pattern_vector : np.ndarray (n_cells,)
+        pattern score from a model (e.g., Pearson pattern score).
     coords : np.ndarray (n_cells, 2)
         Spatial coordinates (e.g., adata.obsm["spatial"]).
     gene_names : list or np.ndarray
@@ -153,9 +153,9 @@ def fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names,
     if kernel is None:
         kernel = 1.0 * RBF(length_scale=2.0) + WhiteKernel(noise_level=0.1)
 
-    # Fit GP to residuals
+    # Fit GP to pattern score
     gp_r = GaussianProcessRegressor(kernel=kernel, alpha=1e-4, normalize_y=True)
-    gp_r.fit(coords, residual_vector)
+    gp_r.fit(coords, pattern_vector)
     residual_gp_mean = gp_r.predict(coords)
 
     # Fit GP to each gene and compute correlation with residual GP
@@ -176,17 +176,17 @@ def fit_gp_similarity_scores(expr_matrix, residual_vector, coords, gene_names,
     }).sort_values(by="similarity_to_residual_GP", ascending=False)
 
 
-def fit_gp_similarity_scores_fastmode(expr_matrix, residual_vector, coords, gene_names, 
+def fit_gp_similarity_scores_fastmode(expr_matrix, pattern_vector, coords, gene_names, 
                              kernel=None, hyperopt=True, n_jobs=1):
     """
-    Fit a GP to the residuals and a GP to each gene expression vector, compare spatial similarity.
+    Fit a GP to the pattern score and a GP to each gene expression vector, compare spatial similarity.
 
     Parameters
     ----------
     expr_matrix : np.ndarray (n_cells, n_genes)
         Gene expression matrix.
-    residual_vector : np.ndarray (n_cells,)
-        Residuals from a model (e.g., Pearson residuals).
+    pattern_vector : np.ndarray (n_cells,)
+        pattern score from a model (e.g., Pearson pattern score).
     coords : np.ndarray (n_cells, 2)
         Spatial coordinates (e.g., adata.obsm["spatial"]).
     gene_names : list or np.ndarray
@@ -206,9 +206,9 @@ def fit_gp_similarity_scores_fastmode(expr_matrix, residual_vector, coords, gene
     if kernel is None:
         kernel = 1.0 * RBF(length_scale=2.0) + WhiteKernel(noise_level=0.1)
 
-    #  Fit GP to residuals 
+    #  Fit GP to pattern score 
     gp_r = GaussianProcessRegressor(kernel=kernel, alpha=1e-4, normalize_y=True)
-    gp_r.fit(coords, residual_vector)
+    gp_r.fit(coords, pattern_vector)
     residual_gp_mean = gp_r.predict(coords)
 
     # If not hyperopting, extract the kernel after residual fit (re-using for all genes)
@@ -262,16 +262,16 @@ def compute_spatial_weights(coords, k=10, mode="geary"):
     return W
 
 
-def spatial_weighted_correlation_matrix_v1(expr_matrix, residual_vector, W):
+def spatial_weighted_correlation_matrix_v1(expr_matrix, pattern_vector, W):
     """
-    Compute spatially weighted correlation between each gene and residuals.
+    Compute spatially weighted correlation between each gene and pattern score.
 
     Parameters
     ----------
     expr_matrix : np.ndarray (n_cells, n_genes)
         Gene expression matrix.
-    residual_vector : np.ndarray (n_cells,)
-        Residuals to correlate with each gene (e.g., pearson or raw).
+    pattern_vector : np.ndarray (n_cells,)
+        pattern score to correlate with each gene (e.g., pearson or raw).
     mode : str
         "geary" or "moran" style weighting.
 
@@ -280,8 +280,8 @@ def spatial_weighted_correlation_matrix_v1(expr_matrix, residual_vector, W):
     pd.Series
         Spatially weighted correlation per gene.
     """
-    n = len(residual_vector)
-    residual_centered = residual_vector - residual_vector.mean()
+    n = len(pattern_vector)
+    residual_centered = pattern_vector - pattern_vector.mean()
     # Correlation per gene
     correlations = []
     for g in range(expr_matrix.shape[1]):
@@ -299,16 +299,16 @@ def spatial_weighted_correlation_matrix_v1(expr_matrix, residual_vector, W):
     return pd.Series(correlations)
 
 
-def spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W, gene_names=None):
+def spatial_weighted_correlation_matrix(expr_matrix, pattern_vector, W, gene_names=None):
     """
-    Compute spatially weighted correlation between each gene and residuals (vectorized).
+    Compute spatially weighted correlation between each gene and pattern score (vectorized).
 
     Parameters
     ----------
     expr_matrix : np.ndarray (n_cells, n_genes)
         Gene expression matrix (dense or sparse, should be float).
-    residual_vector : np.ndarray (n_cells,)
-        Residuals to correlate with each gene (e.g., raw or Pearson).
+    pattern_vector : np.ndarray (n_cells,)
+        pattern score to correlate with each gene (e.g., raw or Pearson).
     W : np.ndarray (n_cells, n_cells)
         Symmetric normalized spatial weight matrix.
 
@@ -317,8 +317,8 @@ def spatial_weighted_correlation_matrix(expr_matrix, residual_vector, W, gene_na
     pd.Series
         Spatially weighted correlation per gene.
     """
-    # Center residuals
-    y = residual_vector - residual_vector.mean()
+    # Center pattern score
+    y = pattern_vector - pattern_vector.mean()
     # Center expression matrix (each gene)
     X = expr_matrix - expr_matrix.mean(axis=0)
     # Compute weighted covariance between each gene and residual
