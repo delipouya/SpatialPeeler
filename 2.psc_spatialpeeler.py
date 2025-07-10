@@ -17,7 +17,6 @@ import warnings
 warnings.simplefilter("ignore", category=ConvergenceWarning)
 from scipy.sparse import issparse
 from functools import reduce
-from matplotlib_venn import venn3
 
 from SpatialPeeler import helpers as hlps
 from SpatialPeeler import case_prediction as cpred
@@ -152,16 +151,23 @@ for i in range(14,optimal_num_pcs_ks): #optimal_num_pcs_ks
     plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
     plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
 
+
+
+################################################
+################### Importing results from pickle and Anndata ##################
 ################################################
 import pickle
 # Save
-with open('/home/delaram/SpatialPeeler/Data/PSC_liver/results.pkl', 'wb') as f:
-    pickle.dump(results, f)
+#with open('/home/delaram/SpatialPeeler/Data/PSC_liver/results.pkl', 'wb') as f:
+#    pickle.dump(results, f)
 # Load
-with open('my_list.pkl', 'rb') as f:
-    my_list = pickle.load(f)
-################################################
+with open('/home/delaram/SpatialPeeler/Data/PSC_liver/results.pkl', 'rb') as f:
+    results = pickle.load(f)
 
+adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad')
+sample_ids = adata_merged.obs['sample_id'].unique().tolist()
+adata = adata_merged.copy()
+################################################
 
 # Store output for the best-performing factor (e.g., first one, or pick based on AUC)
 counter = 1

@@ -23,6 +23,7 @@ from SpatialPeeler import helpers as hlps
 from SpatialPeeler import case_prediction as cpred
 from SpatialPeeler import plotting as plot
 from SpatialPeeler import gene_identification as gid
+import pickle
 
 RAND_SEED = 28
 CASE_COND = 1
@@ -40,12 +41,10 @@ adata_by_sample = {
     for sid in adata_merged.obs['sample_id'].unique()
 }
 sample_ids = list(adata_by_sample.keys())
-
 adata = adata_merged
-################################################
-import pickle
+
 with open('/home/delaram/SpatialPeeler/Data/PSC_liver/results.pkl', 'rb') as f:
-    my_list = pickle.load(f)
+    results = pickle.load(f)
 ################################################
 
 ########################################################################
@@ -56,9 +55,7 @@ factor_idx = 12#8 #12
 result = results[factor_idx] 
 adata.obs['p_hat'] = result['p_hat']
 adata.obs['p_hat'] = adata.obs['p_hat'].astype('float32')
-adata.obs['raw_residual'] = result['raw_residual']
-adata.obs['pearson_residual'] = result['pearson_residual']
-adata.obs['deviance_residual'] = result['deviance_residual']
+adata.obs['p_hat_comp'] = 1 - adata.obs['p_hat']
 
 # Copy adata per sample for plotting
 sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -69,7 +66,7 @@ adata_by_sample = {
 
 print(f"Factor {result['factor_index'] + 1}:")
 ### sanity check
-plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
+plot_grid(adata_by_sample, sample_ids, key="p_hat", 
     title_prefix="HiDDEN predictions", counter=factor_idx+1)
 
 #4:7 are PSC samples, 0:3 are normal samples - initial analysis on sample #5, 4
@@ -98,7 +95,7 @@ print('Moran-W mean: ', W2_moran.mean(),
             'Moran-W sd: ', W2_moran.std())
 
 expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
-residual_vector = an_adata_sample.obs['pearson_residual']  # shape: (n_spots,)
+p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
 
 spatial_corr_1 = gid.spatial_weighted_correlation_matrix(expr_matrix, residual_vector, 
                                                         W1, an_adata_sample.var_names)
