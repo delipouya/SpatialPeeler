@@ -23,6 +23,7 @@ from SpatialPeeler import case_prediction as cpred
 from SpatialPeeler import plotting as plot
 from SpatialPeeler import gene_identification as gid
 
+
 RAND_SEED = 28
 CASE_COND = 1
 np.random.seed(RAND_SEED)
@@ -78,6 +79,10 @@ optimal_num_pcs_ks = total_factors
 # Set up HiDDEN input
 adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
 adata.obs['status'] = adata.obs['binary_label'].astype(int).values
+
+
+
+
 
 # Run factor-wise HiDDEN-like analysis (logistic regression on single factors)
 results = cpred.single_factor_logistic_evaluation(
@@ -171,7 +176,7 @@ adata = adata_merged.copy()
 
 # Store output for the best-performing factor (e.g., first one, or pick based on AUC)
 counter = 1
-result = results[24]
+result = results[12] #24
 for result in results[10:26]:
     print(f"Factor {result['factor_index'] + 1}:")
     print(f"  p_hat mean: {result['p_hat'].mean():.4f}")

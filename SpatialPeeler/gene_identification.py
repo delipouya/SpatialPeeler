@@ -12,6 +12,9 @@ import anndata
 from sklearn.neighbors import NearestNeighbors
 from joblib import Parallel, delayed
 
+from SpatialPeeler import weightedcorr as wc
+from SpatialPeeler import helpers as hlps
+
 
 #from scipy.stats import mannwhitneyu
 RAND_SEED = 28
@@ -70,6 +73,45 @@ def pearson_correlation_with_pattern(expr_matrix, pattern_vector, gene_names):
     })
 
 
+def weighted_pearson_correlation_with_pattern(expr_matrix, pattern_vector, W_vector, gene_names, scale=True):
+    """
+    Compute spatially weighted Pearson correlation between each gene and pattern score.
+    Parameters
+    ----------
+    expr_matrix : np.ndarray (n_cells, n_genes)
+        Gene expression matrix.
+    pattern_vector : np.ndarray (n_cells,)
+        pattern score to correlate with each gene (e.g., pearson or raw).
+    W_vector : np.ndarray (n_cells,)
+        Spatial weights vector (e.g., NMF factor values).
+    gene_names : list or np.ndarray
+        List of gene names corresponding to columns of expr_matrix.
+    scale : bool
+        Whether to mean scale the gene expression vector.
+    Returns 
+    -------
+    pd.DataFrame
+        DataFrame with 'gene' and 'pearson_correlation' columns.
+    """
+    pearson_vector = np.zeros(expr_matrix.shape[1])
+
+    for g in range(expr_matrix.shape[1]):
+        exp_g = expr_matrix[:, g]
+        if scale:
+            exp_g = exp_g - exp_g.mean()
+        df = pd.DataFrame({'x': exp_g, 'y': pattern_vector, 'w': W_vector})
+        pearson = wc.WeightedCorr(xyw=df)('pearson')
+        pearson_vector[g] = pearson
+        if g % 100 == 0:
+            print(f"Processed gene {g+1}/{expr_matrix.shape[1]}: Pearson correlation = {pearson:.4f}")
+        
+    pearson_df = pd.DataFrame({
+        'gene': gene_names,
+        'correlation': pearson_vector
+    })
+    pearson_df = pearson_df.sort_values(by='correlation', ascending=False)
+    return pearson_df
+
 
 
 def regression_with_pattern(expr_matrix, pattern_vector, gene_names, scale=True):
@@ -104,7 +146,6 @@ def regression_with_pattern(expr_matrix, pattern_vector, gene_names, scale=True)
             pattern_vector = zscore(pattern_vector)
 
         # Fit OLS regression
-        
         if np.std(x) == 0 or np.std(pattern_vector) == 0:
             slopes.append(np.nan)
             pvals.append(np.nan)
@@ -126,6 +167,32 @@ def regression_with_pattern(expr_matrix, pattern_vector, gene_names, scale=True)
     })
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+########################################################
+########################################################
+########################################################
+############### OLD IMPLEMENTSTIONS ####################
+########################################################
+########################################################
+########################################################
 
 def fit_gp_similarity_scores(expr_matrix, pattern_vector, coords, gene_names, 
                              kernel=None):
@@ -174,6 +241,7 @@ def fit_gp_similarity_scores(expr_matrix, pattern_vector, coords, gene_names,
         "gene": gene_names,
         "similarity_to_residual_GP": similarity_scores
     }).sort_values(by="similarity_to_residual_GP", ascending=False)
+
 
 
 def fit_gp_similarity_scores_fastmode(expr_matrix, pattern_vector, coords, gene_names, 
@@ -236,8 +304,6 @@ def fit_gp_similarity_scores_fastmode(expr_matrix, pattern_vector, coords, gene_
              .sort_values(by="similarity_to_residual_GP", ascending=False)
 
 
-
-
 def compute_spatial_weights(coords, k=10, mode="geary"):
     n = coords.shape[0]
     nbrs = NearestNeighbors(n_neighbors=k+1).fit(coords)
@@ -281,15 +347,15 @@ def spatial_weighted_correlation_matrix_v1(expr_matrix, pattern_vector, W):
         Spatially weighted correlation per gene.
     """
     n = len(pattern_vector)
-    residual_centered = pattern_vector - pattern_vector.mean()
+    pattern_centered = pattern_vector - pattern_vector.mean()
     # Correlation per gene
     correlations = []
     for g in range(expr_matrix.shape[1]):
         x = expr_matrix[:, g]
         x_centered = x - x.mean()
-        cov = np.sum(W * np.outer(x_centered, residual_centered))
+        cov = np.sum(W * np.outer(x_centered, pattern_centered))
         var_x = np.sum(W * np.outer(x_centered, x_centered))
-        var_y = np.sum(W * np.outer(residual_centered, residual_centered))
+        var_y = np.sum(W * np.outer(pattern_centered, pattern_centered))
         if var_x == 0 or var_y == 0:
             correlations.append(np.nan)
         else:
@@ -337,31 +403,3 @@ def spatial_weighted_correlation_matrix(expr_matrix, pattern_vector, W, gene_nam
         "gene": gene_names,
         "correlation": correlations
     })
-
-
-
-
-
-def weighted_mean(x, W):
-    weights = W.sum()
-    return (x.T @ W @ np.ones_like(x)) / weights
-
-def weighted_cov(x, y, W):
-    x = x.flatten()
-    y = y.flatten()
-    mu_x = weighted_mean(x, W)
-    mu_y = weighted_mean(y, W)
-
-    x_centered = x - mu_x
-    y_centered = y - mu_y
-
-    numerator = x_centered.T @ W @ y_centered
-    denominator = W.sum()
-
-    return numerator / denominator
-
-def weighted_corr(x, y, W):
-    cov_xy = weighted_cov(x, y, W)
-    var_x = weighted_cov(x, x, W)
-    var_y = weighted_cov(y, y, W)
-    return cov_xy / np.sqrt(var_x * var_y)
