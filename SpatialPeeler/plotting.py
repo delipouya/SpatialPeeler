@@ -94,7 +94,7 @@ def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
     # Prepare layout
     n_cols = 4
     n_rows = int(np.ceil(len(sample_ids) / n_cols))
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(16, 8))
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(24, 12))
     axs = axs.flatten()
 
     # Global scores
@@ -136,7 +136,7 @@ def plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
     # Layout
     n_cols = 4
     n_rows = int(np.ceil(len(sample_ids) / n_cols))
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(16, 8))
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(24, 12))
     axs = axs.flatten()
 
     # Global arrays

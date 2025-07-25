@@ -115,13 +115,13 @@ def single_factor_logistic_evaluation(adata, factor_key="X_nmf", max_factors=30)
             "scaled_p_hat": scaled_p_hat,
             "logit_p_hat": logit_p_hat,
             "scaled_z": scaled_z,
-            "random_construct": random_construct,
-            "scaled_random_contruct": scaled_random_contruct,
+            #"random_construct": random_construct,
+            #"scaled_random_contruct": scaled_random_contruct,
             "status": y,
             "sample_id": sample_ids,
-            "raw_residual": raw_residual,
-            "pearson_residual": pearson_residual,
-            "deviance_residual": deviance_residual
+            #"raw_residual": raw_residual,
+            #"pearson_residual": pearson_residual,
+            #"deviance_residual": deviance_residual
             }
         
         all_results.append(result)
