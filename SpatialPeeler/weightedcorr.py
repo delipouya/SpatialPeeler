@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import rankdata
 
+### copied from https://github.com/matthijsz/weightedcorr
 
 class WeightedCorr:
     def __init__(self, xyw=None, x=None, y=None, w=None, df=None, wcol=None):
