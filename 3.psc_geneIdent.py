@@ -151,8 +151,8 @@ for sample_id_to_check in range(0, 4):
     plot.plot_gene_spatial(an_adata_sample_2, df['ensemble_id'].values[i], 
                             title=f"{key} - {gene_symbol}", cmap="viridis")
 
-x_axis = 'Regression'
-y_axis = 'Pearson' 
+x_axis = 'Pearson'
+y_axis = 'weighted_pearson' 
 df_vis = pd.merge(corr_dict[x_axis], corr_dict[y_axis], on='symbol', how='inner')
 plt.figure(figsize=(5, 5))
 plt.scatter(df_vis["correlation_x"], 
@@ -161,6 +161,18 @@ plt.xlabel(x_axis + " Cor")
 plt.ylabel(y_axis + " Cor")
 plt.legend()
 plt.show()
+
+#################
+n_gene_venn = 50
+genes_pearson = set(corr_dict['Pearson']["gene"][:n_gene_venn])
+genes_regression = set(corr_dict["Regression"]["gene"][:n_gene_venn])
+genes_weighted_pearson = set(corr_dict["weighted_pearson"]["gene"][:n_gene_venn])
+
+# Plotting two Venn diagrams due to 3-set limitation
+venn3([genes_pearson, genes_weighted_pearson, genes_regression],
+    set_labels=("Pearson", "weighted_pearson", "regression"))
+
+#################
 
 
 n_gene_pathway_thr = 300
@@ -197,15 +209,6 @@ plt.xlabel("Samples")
 plt.ylabel("Genes")
 plt.tight_layout()
 plt.show()
-
-
-n_gene_venn = 50
-genes_pearson = set(corr_dict['Pearson']["gene"][:n_gene_venn])
-genes_regression = set(corr_dict["Regression"]["gene"][:n_gene_venn])
-
-# Plotting two Venn diagrams due to 3-set limitation
-venn3([genes_pearson, genes_w1, genes_regression],
-    set_labels=("Pearson", "Spatial_W1", "regression"))
 
 
 
