@@ -86,6 +86,7 @@ def single_factor_logistic_evaluation(adata, factor_key="X_nmf", max_factors=30)
         logit_p_hat = logit(p_hat)
 
         # Residuals
+        '''
         raw_residual = y - p_hat
         pearson_residual = raw_residual / np.sqrt(p_hat * (1 - p_hat))
         deviance_residual = np.sign(raw_residual) * np.sqrt(
@@ -95,12 +96,7 @@ def single_factor_logistic_evaluation(adata, factor_key="X_nmf", max_factors=30)
         scaled_z = Xi.flatten()/np.sqrt(p_hat * (1 - p_hat))
         random_construct = Xi.flatten() - p_hat
         scaled_random_contruct = random_construct/np.sqrt(p_hat * (1 - p_hat))
-
-        print(f"p_hat[:5]: {p_hat[:5]}"
-              f"Raw residuals: {raw_residual[:5]}"
-              f"\nPearson residuals: {pearson_residual[:5]}"
-              f"\nDeviance residuals: {deviance_residual[:5]}"
-              )
+        '''
 
         # Save the results
         result = {
@@ -112,13 +108,13 @@ def single_factor_logistic_evaluation(adata, factor_key="X_nmf", max_factors=30)
             "pval": float(pvals[1]),                   # p(β ≠ 0)
             "pval_intercept": float(pvals[0]),         # p(β₀ ≠ 0)
             "p_hat": p_hat,
-            "scaled_p_hat": scaled_p_hat,
             "logit_p_hat": logit_p_hat,
-            "scaled_z": scaled_z,
-            #"random_construct": random_construct,
-            #"scaled_random_contruct": scaled_random_contruct,
             "status": y,
             "sample_id": sample_ids,
+            #"scaled_z": scaled_z,
+            #"scaled_p_hat": scaled_p_hat,
+            #"random_construct": random_construct,
+            #"scaled_random_contruct": scaled_random_contruct,
             #"raw_residual": raw_residual,
             #"pearson_residual": pearson_residual,
             #"deviance_residual": deviance_residual

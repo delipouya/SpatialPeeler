@@ -94,7 +94,7 @@ def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
     # Prepare layout
     n_cols = 4
     n_rows = int(np.ceil(len(sample_ids) / n_cols))
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(24, 12))
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(24, 20))
     axs = axs.flatten()
 
     # Global scores
@@ -110,16 +110,17 @@ def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
         p_hat = p_hat_all[idx]
 
         axs[i].scatter(nmf_scores, p_hat, alpha=0.5, s=10)
-        axs[i].set_title(sid, fontsize=10)
-        axs[i].set_xlabel(f"NMF Factor {factor_idx + 1}")
-        axs[i].set_ylabel("p_hat")
+        axs[i].set_title(sid, fontsize=18)
+        axs[i].set_xlabel(f"NMF Factor {factor_idx + 1}", fontsize=20)
+        axs[i].set_ylabel("p_hat", fontsize=20)
+        axs[i].set_ylim(0, 1) ## fix the range
         axs[i].grid(True)
 
     # Turn off unused plots
     for j in range(i + 1, len(axs)):
         axs[j].axis("off")
 
-    plt.suptitle(f"p_hat vs NMF Factor {factor_idx + 1} by sample", fontsize=14)
+    plt.suptitle(f"p_hat vs NMF Factor {factor_idx + 1} by sample", fontsize=23)
     plt.tight_layout(rect=[0, 0, 0.9, 0.95])
     plt.show()
 
@@ -136,7 +137,7 @@ def plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
     # Layout
     n_cols = 4
     n_rows = int(np.ceil(len(sample_ids) / n_cols))
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(24, 12))
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(24, 20))
     axs = axs.flatten()
 
     # Global arrays
@@ -151,8 +152,8 @@ def plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
         nmf_scores = nmf_scores_all[idx]
         logit_p_hat = logit_p_hat_all[idx]
 
-        axs[i].scatter(nmf_scores, logit_p_hat, alpha=0.5, s=10)
-        axs[i].set_title(sid, fontsize=10)
+        axs[i].scatter(nmf_scores, logit_p_hat, alpha=0.7, s=10)
+        axs[i].set_title(sid, fontsize=14)
         axs[i].set_xlabel(f"NMF Factor {factor_idx + 1}")
         axs[i].set_ylabel("logit(p̂)")
         axs[i].grid(True)

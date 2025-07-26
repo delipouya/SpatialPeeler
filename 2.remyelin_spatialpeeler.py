@@ -117,9 +117,8 @@ adata_merged.obsm["X_pca"] = adata_merged.obsm["X_nmf"]  # Use NMF factors as PC
 optimal_num_pcs_ks = total_factors
 # Set up HiDDEN input
 adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
+adata.obs['binary_label'] = adata.obs['Condition'].apply(lambda x: 1 if x == 'LPC' else 0)
 adata.obs['status'] = adata.obs['binary_label'].astype(int).values
-
-
 
 
 
@@ -127,12 +126,6 @@ adata.obs['status'] = adata.obs['binary_label'].astype(int).values
 results = cpred.single_factor_logistic_evaluation(
     adata, factor_key="X_pca", max_factors=optimal_num_pcs_ks
 )
-
-# Run factor-wise HiDDEN-like analysis (logistic regression on single factors)
-results_orig = cpred.single_factor_logistic_evaluation_original(
-    adata, factor_key="X_pca", max_factors=optimal_num_pcs_ks
-)
-
 
 # Extract full model stats for each factor
 coef_list = [res['coef'] for res in results]
@@ -162,28 +155,22 @@ sns.histplot(coef_df['coef'], bins=30, kde=False, color='blue', stat='density')
 plt.title("Distribution of Coefficients Across Factors")
 plt.xlabel("Coefficient Value")
 plt.ylabel("Density")
-plt.axvline(x=200, color='red', linestyle='--', label='DAM - GOF')
-plt.axvline(x=-200, color='green', linestyle='--', label='DAM - LOF')
 plt.legend()
 plt.show()
 
 
-factor_id = 24
+factor_id = 0
 results[factor_id]['p_hat']  # p_hat for the first factor
-results[factor_id]['scaled_p_hat']  # p_hat for the first factor
-adata_merged.obs['disease']
+adata_merged.obs['Condition']
 ### create a dataframe 
 df_p_hat = pd.DataFrame({
-    'disease': adata_merged.obs['disease'],
+    'disease': adata_merged.obs['Condition'],
     'sample_id': adata_merged.obs['sample_id'],
-    'p_hat': results[factor_id]['p_hat'],
-    'scaled_p_hat': results[factor_id]['scaled_p_hat'],
-    'pearson_residual': results[factor_id]['pearson_residual'],
-    'raw_residual': results[factor_id]['raw_residual'],
+    'p_hat': results[factor_id]['p_hat']
 
 })
 plt.figure(figsize=(10, 10))
-sns.violinplot(y="scaled_p_hat", x="disease",  
+sns.violinplot(y="p_hat", x="disease",  
                data=df_p_hat, inner="box", palette="Set2")
 plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.tight_layout()
@@ -191,9 +178,10 @@ plt.show()
 
 
 ########################  VISUALIZATION  ########################
-for i in range(14,optimal_num_pcs_ks): #optimal_num_pcs_ks
-    plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
-    plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
+for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
+    plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
+    #plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
+    #plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
 
 
 
@@ -202,13 +190,13 @@ for i in range(14,optimal_num_pcs_ks): #optimal_num_pcs_ks
 ################################################
 import pickle
 # Save
-#with open('/home/delaram/SpatialPeeler/Data/PSC_liver/results.pkl', 'wb') as f:
+#with open('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl', 'wb') as f:
 #    pickle.dump(results, f)
 # Load
-with open('/home/delaram/SpatialPeeler/Data/PSC_liver/results.pkl', 'rb') as f:
+with open('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl', 'rb') as f:
     results = pickle.load(f)
 
-adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad')
+adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 sample_ids = adata_merged.obs['sample_id'].unique().tolist()
 adata = adata_merged.copy()
 ################################################
@@ -216,19 +204,24 @@ adata = adata_merged.copy()
 # Store output for the best-performing factor (e.g., first one, or pick based on AUC)
 counter = 1
 result = results[12] #24
-for result in results[10:26]:
+GOF_index = [1, 14, 12, 22, 26, 0]
+LOF_index = [2, 6, 13]
+results_LOF = [results[i] for i in LOF_index]
+results_GOF = [results[i] for i in GOF_index]
+
+for result in results_GOF:
     print(f"Factor {result['factor_index'] + 1}:")
     print(f"  p_hat mean: {result['p_hat'].mean():.4f}")
     print(f"  Status distribution: {np.bincount(result['status'])}")
 
     adata.obs['p_hat'] = result['p_hat']
     adata.obs['p_hat'] = adata.obs['p_hat'].astype('float32')
-    adata.obs['scaled_p_hat'] = result['scaled_p_hat']
-    adata.obs['scaled_z'] = result['scaled_z']
-    adata.obs['random_construct'] = result['random_construct']
-    adata.obs['raw_residual'] = result['raw_residual']
-    adata.obs['pearson_residual'] = result['pearson_residual']
-    adata.obs['deviance_residual'] = result['deviance_residual']
+    #adata.obs['scaled_p_hat'] = result['scaled_p_hat']
+    #adata.obs['scaled_z'] = result['scaled_z']
+    #adata.obs['random_construct'] = result['random_construct']
+    #adata.obs['raw_residual'] = result['raw_residual']
+    #adata.obs['pearson_residual'] = result['pearson_residual']
+    #adata.obs['deviance_residual'] = result['deviance_residual']
     
 
     # Copy adata per sample for plotting
@@ -249,21 +242,21 @@ for result in results[10:26]:
     title_prefix="HiDDEN predictions", counter=counter)
 
     # for scaled p_hat
-    plot.plot_grid(adata_by_sample, sample_ids, key="scaled_p_hat",
-    title_prefix="Scaled HiDDEN predictions", counter=counter)
+    #plot.plot_grid(adata_by_sample, sample_ids, key="scaled_p_hat",
+    #title_prefix="Scaled HiDDEN predictions", counter=counter)
 
-    plot.plot_grid(adata_by_sample, sample_ids, key="scaled_z",
-    title_prefix="Scaled Z", counter=counter)
+    #plot.plot_grid(adata_by_sample, sample_ids, key="scaled_z",
+    #title_prefix="Scaled Z", counter=counter)
 
-    plot.plot_grid(adata_by_sample, sample_ids, key="random_construct",
-    title_prefix="Random Construct", counter=counter)
+    #plot.plot_grid(adata_by_sample, sample_ids, key="random_construct",
+    #title_prefix="Random Construct", counter=counter)
     
     # For raw residuals
-    plot.plot_grid(adata_by_sample, sample_ids, key="raw_residual", 
-                   title_prefix="Raw Residual", counter=counter)
+    #plot.plot_grid(adata_by_sample, sample_ids, key="raw_residual", 
+    #               title_prefix="Raw Residual", counter=counter)
     # For Pearson residuals
-    plot.plot_grid(adata_by_sample, sample_ids, key="pearson_residual", 
-    title_prefix="Pearson Residual", counter=counter)
+    #plot.plot_grid(adata_by_sample, sample_ids, key="pearson_residual", 
+    #title_prefix="Pearson Residual", counter=counter)
 
 
     counter += 1
