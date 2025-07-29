@@ -40,20 +40,37 @@ vis.visual_settings()
 root_dir = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq'
 
 #######################################
-#### importing the unprocessed data  ####
-#subdir = '2023-08-25_Puck_230117_01/'
-#puck_dir = os.path.join(root_dir, subdir)
-#puck_id = subdir.split('_')[2]  # Extract puck ID from subdir name
-#adata = imp.load_slide_seq_puck(puck_dir=puck_dir, puck_id=subdir)
-#adata_merged = imp.load_all_slide_seq_data(root_dir)
+#### importing the uncropped data  ####
+adata_merged = imp.load_all_slide_seq_data(root_dir)
+
+base = "/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/all_final_cropped_pucks_standardpipeline"
+obs = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_metadata.csv", index_col=0)
+
+metadata = {'sample_id': obs['orig.ident'].values.tolist(),
+            'timepoint': obs['Timepoint'].values.tolist(),
+            'animal': obs['Animal'].values.tolist(),
+            'condition': obs['Condition'].values.tolist()}
+
+metadata['puck_id'] =  [f"2023-08-25_{name}" for name in metadata['sample_id']]   
+metadata_df = pd.DataFrame(metadata)
+metadata_df = metadata_df.reset_index(drop=True)
+duplicate_rows_mask = metadata_df.duplicated()
+metadata_df = metadata_df[~duplicate_rows_mask]
+
+print(metadata_df.head())
+print(metadata_df.shape)
+### add medata to adata object based on the puck_id column
+adata_merged.obs = adata_merged.obs.merge(metadata_df, on='puck_id', how='left')
+print(adata_merged.obs.head())
+
 ########################################
 
 
 
-
+##################################################################
+################# Importing the cropped data  ####################
 base = "/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/all_final_cropped_pucks_standardpipeline"
 #scaled_counts = io.mmread(f"{base}/all_final_cropped_pucks_standardpipeline_scaled_counts.mtx").tocsr()
-
 merged_counts = io.mmread(f"{base}/all_final_cropped_pucks_standardpipeline_counts_merged.mtx").tocsr()
 obs_names = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_barcodes.tsv", header=None)[0].values
 var_names = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_features.tsv", header=None)[0].values
@@ -64,9 +81,9 @@ adata_merged = sc.AnnData(X=merged_counts.T, ### X should be(cells x genes)
                    obs= obs)
 adata_merged.obs_names = obs_names
 adata_merged.var_names = var_names
+##################################################################
 
 ### Apply NMF
-
 # Step 1: Normalize and log-transform - I DIDN'T USE THIS
 sc.pp.normalize_total(adata_merged, target_sum=1e4)
 sc.pp.log1p(adata_merged)
