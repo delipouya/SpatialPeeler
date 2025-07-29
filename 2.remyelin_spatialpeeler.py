@@ -191,7 +191,6 @@ for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
 ################################################
 ################### Importing results from pickle and Anndata ##################
 ################################################
-
 # Save
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
 results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
@@ -223,6 +222,7 @@ print(GOF_index)
 results_LOF = [results[i] for i in LOF_index]
 results_GOF = [results[i] for i in GOF_index]
 
+
 for result in results_GOF:
     print(f"Factor {result['factor_index'] + 1}:")
     factor_number = result['factor_index'] + 1
@@ -231,13 +231,6 @@ for result in results_GOF:
 
     adata.obs['p_hat'] = result['p_hat']
     adata.obs['p_hat'] = adata.obs['p_hat'].astype('float32')
-    #adata.obs['scaled_p_hat'] = result['scaled_p_hat']
-    #adata.obs['scaled_z'] = result['scaled_z']
-    #adata.obs['random_construct'] = result['random_construct']
-    #adata.obs['raw_residual'] = result['raw_residual']
-    #adata.obs['pearson_residual'] = result['pearson_residual']
-    #adata.obs['deviance_residual'] = result['deviance_residual']
-    
 
     # Copy adata per sample for plotting
     sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -250,14 +243,13 @@ for result in results_GOF:
     #    plot_spatial_p_hat(adata_by_sample[sample_ids[i]], sample_ids[i])
     
     # For NMF factor  (from obsm)
-    plot_grid(adata_by_sample, sample_ids, key="X_nmf", 
+    plot.plot_grid(adata_by_sample, sample_ids, key="X_nmf", 
     title_prefix="NMF Factor", counter=factor_number, from_obsm=True, 
-    factor_idx=factor_number-1, 
-    figsize=(50, 30), fontsize=35)
+    factor_idx=factor_number-1, figsize=(45, 33), fontsize=45)
+    
     # For p_hat #plot.
-    plot_grid(adata_by_sample, sample_ids, key="p_hat", 
-    title_prefix="HiDDEN predictions", counter=factor_number, 
-    figsize=(50, 30), fontsize=35)
+    plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
+    title_prefix="HiDDEN predictions", counter=factor_number, figsize=(42, 30), fontsize=45)
 
     counter += 1
 
