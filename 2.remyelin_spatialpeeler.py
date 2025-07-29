@@ -23,6 +23,7 @@ from SpatialPeeler import case_prediction as cpred
 from SpatialPeeler import plotting as plot
 from SpatialPeeler import gene_identification as gid
 
+import pickle
 
 RAND_SEED = 28
 CASE_COND = 1
@@ -32,7 +33,10 @@ utils.print_module_versions([sc, anndata, scvi, hiddensc])
 vis.visual_settings()
 
 
-adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
+#adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+
+### cropped data
 adata_merged.obs['Condition'].value_counts() 
 # LPC       28582
 # Saline     9522
@@ -40,12 +44,11 @@ adata_merged.obs['Animal'].value_counts()
 #['M140','M261','M257','M255','M259','EG102','EG98','EG100','M254','M258','EG103','EG99']
 adata_merged.obs['Timepoint'].value_counts() # [12, 18, 3, 7]
 
-adata_merged.obs['sample_id'] = adata_merged.obs['orig.ident']
+adata_merged.obs['sample_id'] = adata_merged.obs['puck_id']
+#adata_merged.obs['sample_id'] = adata_merged.obs['orig.ident']
 spatial = {'x': adata_merged.obs['x'].values.astype(float).tolist(), 
            'y': adata_merged.obs['y'].values.astype(float).tolist()}
-
-adata_merged.obsm["spatial"] = pd.DataFrame(spatial, 
-                                             index=adata_merged.obs.index).values
+#adata_merged.obsm["spatial"] = pd.DataFrame(spatial, index=adata_merged.obs.index).values
 
 
 sample_ids = adata_merged.obs['sample_id'].unique().tolist()
@@ -66,12 +69,12 @@ duplicate_rows_mask = metadata_df.duplicated()
 metadata_df = metadata_df[~duplicate_rows_mask]
 metadata_df
 
-
 sid=sample_ids[0]
 for i in range(len(sample_ids)):
     sid = sample_ids[i]
     print(f"Plotting for sample: {sid}")
-    plot.plot_spatial_nmf(adata_by_sample[sid], 0, sample_id=sid)
+    plot_spatial_nmf(adata_by_sample[sid], 0, sample_id=sid, figsize=(10, 10))
+    #plot.plot_spatial_nmf(adata_by_sample[sid], 0, sample_id=sid)
     #plot.plot_spatial_nmf(adata_by_sample[sid], 1, sample_id=sid)
     #plot.plot_spatial_nmf(adata_by_sample[sid], 2, sample_id=sid)
     
@@ -81,7 +84,7 @@ for i in range(len(sample_ids)):
 total_factors = adata_merged.obsm["X_nmf"].shape[1]
 adata = adata_merged
 
-num_factors = 3#8
+num_factors = 8
 nmf_factors = adata.obsm['X_nmf'][:, :num_factors]
 nmf_df = pd.DataFrame(nmf_factors, 
                       columns=[f'NMF{i+1}' for i in range(nmf_factors.shape[1])])
@@ -179,7 +182,7 @@ plt.show()
 
 ########################  VISUALIZATION  ########################
 for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
-    plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
+    plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
     #plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
     #plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
 
@@ -188,29 +191,41 @@ for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
 ################################################
 ################### Importing results from pickle and Anndata ##################
 ################################################
-import pickle
+
 # Save
-#with open('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl', 'wb') as f:
-#    pickle.dump(results, f)
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
+with open(results_path, 'wb') as f:
+    pickle.dump(results, f)
 # Load
-with open('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl', 'rb') as f:
+with open(results_path, 'rb') as f:
     results = pickle.load(f)
 
-adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+#adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
 sample_ids = adata_merged.obs['sample_id'].unique().tolist()
 adata = adata_merged.copy()
 ################################################
 
 # Store output for the best-performing factor (e.g., first one, or pick based on AUC)
 counter = 1
-result = results[12] #24
+result = results[24] #24
+### cropped indices
 GOF_index = [1, 14, 12, 22, 26, 0]
 LOF_index = [2, 6, 13]
+#### uncropped indices
+GOF_index = [24, 20, 3, 2, 27, 17, 13, 9]
+
+GOF_index = [24]
+LOF_index = [11, 7, 23, 26, 29, 6, 12, 22]
+
+print(GOF_index)
 results_LOF = [results[i] for i in LOF_index]
 results_GOF = [results[i] for i in GOF_index]
 
 for result in results_GOF:
     print(f"Factor {result['factor_index'] + 1}:")
+    factor_number = result['factor_index'] + 1
     print(f"  p_hat mean: {result['p_hat'].mean():.4f}")
     print(f"  Status distribution: {np.bincount(result['status'])}")
 
@@ -235,29 +250,14 @@ for result in results_GOF:
     #    plot_spatial_p_hat(adata_by_sample[sample_ids[i]], sample_ids[i])
     
     # For NMF factor  (from obsm)
-    plot.plot_grid(adata_by_sample, sample_ids, key="X_nmf", 
-    title_prefix="NMF Factor", counter=counter, from_obsm=True, factor_idx=3)
-    # For p_hat
-    plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
-    title_prefix="HiDDEN predictions", counter=counter)
-
-    # for scaled p_hat
-    #plot.plot_grid(adata_by_sample, sample_ids, key="scaled_p_hat",
-    #title_prefix="Scaled HiDDEN predictions", counter=counter)
-
-    #plot.plot_grid(adata_by_sample, sample_ids, key="scaled_z",
-    #title_prefix="Scaled Z", counter=counter)
-
-    #plot.plot_grid(adata_by_sample, sample_ids, key="random_construct",
-    #title_prefix="Random Construct", counter=counter)
-    
-    # For raw residuals
-    #plot.plot_grid(adata_by_sample, sample_ids, key="raw_residual", 
-    #               title_prefix="Raw Residual", counter=counter)
-    # For Pearson residuals
-    #plot.plot_grid(adata_by_sample, sample_ids, key="pearson_residual", 
-    #title_prefix="Pearson Residual", counter=counter)
-
+    plot_grid(adata_by_sample, sample_ids, key="X_nmf", 
+    title_prefix="NMF Factor", counter=factor_number, from_obsm=True, 
+    factor_idx=factor_number-1, 
+    figsize=(50, 30), fontsize=35)
+    # For p_hat #plot.
+    plot_grid(adata_by_sample, sample_ids, key="p_hat", 
+    title_prefix="HiDDEN predictions", counter=factor_number, 
+    figsize=(50, 30), fontsize=35)
 
     counter += 1
 

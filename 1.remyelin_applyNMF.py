@@ -47,11 +47,12 @@ base = "/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/all_final_cropped_pu
 obs = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_metadata.csv", index_col=0)
 
 metadata = {'sample_id': obs['orig.ident'].values.tolist(),
-            'timepoint': obs['Timepoint'].values.tolist(),
-            'animal': obs['Animal'].values.tolist(),
-            'condition': obs['Condition'].values.tolist()}
+            'Timepoint': obs['Timepoint'].values.tolist(),
+            'Animal': obs['Animal'].values.tolist(),
+            'Condition': obs['Condition'].values.tolist()}
 
-metadata['puck_id'] =  [f"2023-08-25_{name}" for name in metadata['sample_id']]   
+#metadata['puck_id'] =  [f"2023-08-25_{name}" for name in metadata['sample_id']]   
+metadata['puck_id'] =  metadata['sample_id']
 metadata_df = pd.DataFrame(metadata)
 metadata_df = metadata_df.reset_index(drop=True)
 duplicate_rows_mask = metadata_df.duplicated()
@@ -114,4 +115,5 @@ adata_merged.uns["nmf_components"] = H
 
 
 ### save adata object with NMF results  
-adata_merged.write_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+#adata_merged.write_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+adata_merged.write_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')

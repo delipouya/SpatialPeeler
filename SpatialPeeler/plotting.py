@@ -43,7 +43,7 @@ def plot_gene_spatial(adata, gene_id, title, cmap="viridis"):
 
 
 
-def plot_spatial_nmf(adata, factor_idx, sample_id=None):
+def plot_spatial_nmf(adata, factor_idx, sample_id=None, figsize=(10, 10)):
     spatial = adata.obsm["spatial"]
     values = adata.obsm["X_nmf"][:, factor_idx]
 
@@ -52,7 +52,7 @@ def plot_spatial_nmf(adata, factor_idx, sample_id=None):
     vmin = np.quantile(values, 0.01)
     values = np.clip(values, vmin, vmax)
 
-    plt.figure(figsize=(5, 5))
+    plt.figure(figsize=figsize)
     sc_plot = plt.scatter(spatial[:, 0], spatial[:, 1], c=values, cmap="viridis", s=10)
     plt.axis("equal")
     title = f"NMF Factor {factor_idx + 1}"
@@ -169,7 +169,7 @@ def plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
 
 
 def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter, 
-              from_obsm=False, factor_idx=None):
+              from_obsm=False, factor_idx=None, figsize=(16, 8), fontsize=10):
     """
     Plots a spatial grid of actual (unclipped) values from .obs or .obsm.
 
@@ -200,7 +200,7 @@ def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter,
     # Grid layout
     n_cols = 4
     n_rows = int(np.ceil(len(sample_ids) / n_cols))
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(16, 8))
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=figsize)
     axs = axs.flatten()
 
     # Plot each sample
@@ -221,16 +221,16 @@ def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter,
             vmin=vmin,
             vmax=vmax
         )
-        axs[i].set_title(sid, fontsize=10)
+        axs[i].set_title(sid, fontsize=fontsize)
         axs[i].axis("off")
 
     # Shared colorbar
     cbar_ax = fig.add_axes([0.92, 0.25, 0.015, 0.5])
     cb = fig.colorbar(im, cax=cbar_ax)
-    cb.set_label(key.replace("_", " ").title(), fontsize=12)
+    cb.set_label(key.replace("_", " ").title(), fontsize=fontsize+2)
 
     # Title
-    plt.suptitle(f"{title_prefix} across spatial coordinates for factor {counter}", fontsize=14)
+    plt.suptitle(f"{title_prefix} across spatial coordinates for factor {counter}", fontsize=fontsize+3)
     plt.tight_layout(rect=[0, 0, 0.9, 0.95])
     plt.show()
 

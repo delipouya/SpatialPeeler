@@ -84,7 +84,7 @@ sample_id_to_check = 3 #5 11
 an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
 
 
-PATTERN_COND = 'GOF' #'LOF'#
+PATTERN_COND = 'GOF'  # 'GOF' or 'LOF'
 expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
 p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
 neg_p_hat_vector = an_adata_sample.obs['1_p_hat']  # shape: (n_spots,)
@@ -181,7 +181,7 @@ for sample_id_to_check in range(0, 4):
     plot.plot_gene_spatial(an_adata_sample_2, df['ensemble_id'].values[i], 
                             title=f"{key} - {gene_symbol}", cmap="viridis")
 
-x_axis = 'weighted_pearson'
+x_axis = 'Regression'#'weighted_pearson'
 y_axis = 'Pearson' 
 df_vis = pd.merge(corr_dict[x_axis], corr_dict[y_axis], on='symbol', how='inner')
 plt.figure(figsize=(5, 5))
