@@ -23,9 +23,9 @@ import warnings
 warnings.simplefilter("ignore", category=ConvergenceWarning)
 
 
-def map_ensembl_to_symbol(ensembl_ids):
+def map_ensembl_to_symbol(ensembl_ids, species='human'):
     mg = mygene.MyGeneInfo()
-    result = mg.querymany(ensembl_ids, scopes='ensembl.gene', fields='symbol', species='human')
+    result = mg.querymany(ensembl_ids, scopes='ensembl.gene', fields='symbol',species=species)
     
     # Build mapping dict
     id_to_symbol = {r['query']: r.get('symbol', None) for r in result}

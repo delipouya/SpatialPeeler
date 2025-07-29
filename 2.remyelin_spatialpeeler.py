@@ -81,7 +81,7 @@ for i in range(len(sample_ids)):
 total_factors = adata_merged.obsm["X_nmf"].shape[1]
 adata = adata_merged
 
-num_factors = 8
+num_factors = 3#8
 nmf_factors = adata.obsm['X_nmf'][:, :num_factors]
 nmf_df = pd.DataFrame(nmf_factors, 
                       columns=[f'NMF{i+1}' for i in range(nmf_factors.shape[1])])

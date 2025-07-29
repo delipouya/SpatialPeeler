@@ -138,19 +138,39 @@ def regression_with_pattern(expr_matrix, pattern_vector, gene_names, scale=True)
     pvals = []
     r_squared = []
 
+    x_inf_index = []
+    pattern_inf_index = []
+    x_zero_std_index = []
+    pattern_zero_std_index = []
+
+
     for g in range(expr_matrix.shape[1]):
         x = expr_matrix[:, g]
+        
+        # Skip if constant or contains NaNs/infs
+        if (
+            np.std(x) == 0 or np.std(pattern_vector) == 0 or
+            np.any(~np.isfinite(x)) or np.any(~np.isfinite(pattern_vector))
+        ):
+            if np.std(x) == 0:
+                x_zero_std_index.append(g)
+            if np.std(pattern_vector) == 0:
+                pattern_zero_std_index.append(g)
+            if not np.all(np.isfinite(x)):
+                x_inf_index.append(g)
+            if not np.all(np.isfinite(pattern_vector)):
+                pattern_inf_index.append(g)
+
+            slopes.append(np.nan)
+            pvals.append(np.nan)
+            r_squared.append(np.nan)
+            continue
+
         if scale:
             # Scale both gene expression and pattern score
             x = zscore(x)
             pattern_vector = zscore(pattern_vector)
 
-        # Fit OLS regression
-        if np.std(x) == 0 or np.std(pattern_vector) == 0:
-            slopes.append(np.nan)
-            pvals.append(np.nan)
-            r_squared.append(np.nan)
-            continue
 
         X = add_constant(x)
         model = OLS(pattern_vector, X).fit()
@@ -159,17 +179,14 @@ def regression_with_pattern(expr_matrix, pattern_vector, gene_names, scale=True)
         pvals.append(model.pvalues[1])        # p-value for β₁
         r_squared.append(model.rsquared)      # goodness of fit
 
-    return pd.DataFrame({
+    df = pd.DataFrame({
         "gene": gene_names,
         "slope": slopes,
         "pval": pvals,
         "r_squared": r_squared
     })
 
-
-
-
-
+    return df
 
 
 
