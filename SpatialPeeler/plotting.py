@@ -226,7 +226,10 @@ def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter,
 
     # Shared colorbar
     cbar_ax = fig.add_axes([0.92, 0.25, 0.015, 0.5])
+    ### increase fontsize of colorbar
+    cbar_ax.tick_params(labelsize=fontsize)
     cb = fig.colorbar(im, cax=cbar_ax)
+    # Set label with increased fontsize
     cb.set_label(key.replace("_", " ").title(), fontsize=fontsize+2)
 
     # Title

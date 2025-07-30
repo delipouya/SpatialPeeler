@@ -33,56 +33,50 @@ utils.print_module_versions([sc, anndata, scvi, hiddensc])
 vis.visual_settings()
 
 
-adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
-#adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
+#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 
 ### cropped data
-adata_merged.obs['Condition'].value_counts() 
+adata.obs['Condition'].value_counts() 
 # LPC       28582
 # Saline     9522
-adata_merged.obs['Animal'].value_counts()
+adata.obs['Animal'].value_counts()
 #['M140','M261','M257','M255','M259','EG102','EG98','EG100','M254','M258','EG103','EG99']
-adata_merged.obs['Timepoint'].value_counts() # [12, 18, 3, 7]
+adata.obs['Timepoint'].value_counts() # [12, 18, 3, 7]
 
-adata_merged.obs['sample_id'] = adata_merged.obs['puck_id']
-#adata_merged.obs['sample_id'] = adata_merged.obs['orig.ident']
-spatial = {'x': adata_merged.obs['x'].values.astype(float).tolist(), 
-           'y': adata_merged.obs['y'].values.astype(float).tolist()}
-#adata_merged.obsm["spatial"] = pd.DataFrame(spatial, index=adata_merged.obs.index).values
+adata.obs['sample_id'] = adata.obs['puck_id']
+#adata.obs['sample_id'] = adata.obs['orig.ident']
+spatial = {'x': adata.obs['x'].values.astype(float).tolist(), 
+           'y': adata.obs['y'].values.astype(float).tolist()}
+#adata.obsm["spatial"] = pd.DataFrame(spatial, index=adata.obs.index).values
 
 
-sample_ids = adata_merged.obs['sample_id'].unique().tolist()
+sample_ids = adata.obs['sample_id'].unique().tolist()
 # Create a dictionary splitting the merged data by sample
 adata_by_sample = {
-    sid: adata_merged[adata_merged.obs['sample_id'] == sid].copy()
-    for sid in adata_merged.obs['sample_id'].unique()
+    sid: adata[adata.obs['sample_id'] == sid].copy()
+    for sid in adata.obs['sample_id'].unique()
 }
 sample_ids = list(adata_by_sample.keys())
 
-metadata = {'sample_id': adata_merged.obs['sample_id'].values.tolist(),
-            'timepoint': adata_merged.obs['Timepoint'].values.tolist(),
-            'animal': adata_merged.obs['Animal'].values.tolist(),
-            'condition': adata_merged.obs['Condition'].values.tolist()}
-metadata_df = pd.DataFrame(metadata, index=adata_merged.obs.index)
+metadata = {'sample_id': adata.obs['sample_id'].values.tolist(),
+            'Timepoint': adata.obs['Timepoint'].values.tolist(),
+            'Animal': adata.obs['Animal'].values.tolist(),
+            'Condition': adata.obs['Condition'].values.tolist()}
+metadata_df = pd.DataFrame(metadata, index=adata.obs.index)
 metadata_df = metadata_df.reset_index(drop=True)
 duplicate_rows_mask = metadata_df.duplicated()
 metadata_df = metadata_df[~duplicate_rows_mask]
 metadata_df
 
-sid=sample_ids[0]
-for i in range(len(sample_ids)):
+for i in range(0, 3): #len(sample_ids)
     sid = sample_ids[i]
     print(f"Plotting for sample: {sid}")
-    plot_spatial_nmf(adata_by_sample[sid], 0, sample_id=sid, figsize=(10, 10))
-    #plot.plot_spatial_nmf(adata_by_sample[sid], 0, sample_id=sid)
-    #plot.plot_spatial_nmf(adata_by_sample[sid], 1, sample_id=sid)
-    #plot.plot_spatial_nmf(adata_by_sample[sid], 2, sample_id=sid)
-    
-    
+    plot.plot_spatial_nmf(adata_by_sample[sid], 0, sample_id=sid, figsize=(10, 10))
+    plot.plot_spatial_nmf(adata_by_sample[sid], 1, sample_id=sid, figsize=(10, 10))
+    plot.plot_spatial_nmf(adata_by_sample[sid], 2, sample_id=sid, figsize=(10, 10))
 
-
-total_factors = adata_merged.obsm["X_nmf"].shape[1]
-adata = adata_merged
+total_factors = adata.obsm["X_nmf"].shape[1]
 
 num_factors = 8
 nmf_factors = adata.obsm['X_nmf'][:, :num_factors]
@@ -111,11 +105,9 @@ plt.show()
 ##################################################################
 ########### Running HiDDEN on the NMF ######################
 
-#adata_merged.obsm["X_nmf"] 
-#adata_merged.uns["nmf_components"]
+#adata.obsm["X_nmf"] 
+#adata.uns["nmf_components"]
 
-adata = adata_merged.copy()
-adata_merged.obsm["X_pca"] = adata_merged.obsm["X_nmf"]  # Use NMF factors as PCA scores
 
 optimal_num_pcs_ks = total_factors
 # Set up HiDDEN input
@@ -127,7 +119,7 @@ adata.obs['status'] = adata.obs['binary_label'].astype(int).values
 
 # Run factor-wise HiDDEN-like analysis (logistic regression on single factors)
 results = cpred.single_factor_logistic_evaluation(
-    adata, factor_key="X_pca", max_factors=optimal_num_pcs_ks
+    adata, factor_key="X_nmf", max_factors=optimal_num_pcs_ks
 )
 
 # Extract full model stats for each factor
@@ -162,13 +154,13 @@ plt.legend()
 plt.show()
 
 
-factor_id = 0
+factor_id = 24
 results[factor_id]['p_hat']  # p_hat for the first factor
-adata_merged.obs['Condition']
+adata.obs['Condition']
 ### create a dataframe 
 df_p_hat = pd.DataFrame({
-    'disease': adata_merged.obs['Condition'],
-    'sample_id': adata_merged.obs['sample_id'],
+    'disease': adata.obs['Condition'],
+    'sample_id': adata.obs['sample_id'],
     'p_hat': results[factor_id]['p_hat']
 
 })
@@ -183,7 +175,6 @@ plt.show()
 ########################  VISUALIZATION  ########################
 for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
     plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
-    #plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
     #plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
 
 
@@ -194,16 +185,16 @@ for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
 # Save
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
 results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
-with open(results_path, 'wb') as f:
-    pickle.dump(results, f)
+#with open(results_path, 'wb') as f:
+#    pickle.dump(results, f)
 # Load
 with open(results_path, 'rb') as f:
     results = pickle.load(f)
 
-#adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
-adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
-sample_ids = adata_merged.obs['sample_id'].unique().tolist()
-adata = adata_merged.copy()
+#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
+sample_ids = adata.obs['sample_id'].unique().tolist()
+
 ################################################
 
 # Store output for the best-performing factor (e.g., first one, or pick based on AUC)
@@ -212,18 +203,88 @@ result = results[24] #24
 ### cropped indices
 GOF_index = [1, 14, 12, 22, 26, 0]
 LOF_index = [2, 6, 13]
+
 #### uncropped indices
 GOF_index = [24, 20, 3, 2, 27, 17, 13, 9]
+#GOF_index = [24, 20]
 
-GOF_index = [24]
 LOF_index = [11, 7, 23, 26, 29, 6, 12, 22]
+LOF_index = [11, 7, 23, 26]
 
 print(GOF_index)
 results_LOF = [results[i] for i in LOF_index]
 results_GOF = [results[i] for i in GOF_index]
 
 
-for result in results_GOF:
+for result in results:
+    print(f"Factor {result['factor_index'] + 1}:")
+    factor_number = result['factor_index'] + 1
+    print(f"  p_hat mean: {result['p_hat'].mean():.4f}")
+    print(f"  Status distribution: {np.bincount(result['status'])}")
+
+### creat a heatmap of p_hat for each factor for correlation (30x30)
+p_hat_matrix = np.array([res['p_hat'] for res in results])
+p_hat_df = pd.DataFrame(p_hat_matrix.T,
+                        columns=[f'Factor_{i+1}' for i in range(len(results))],
+                        index=[f'Sample_{i+1}' for i in range(p_hat_matrix.shape[1])])
+
+plt.figure(figsize=(30, 25))
+sns.heatmap(p_hat_df.corr(), annot=True, cmap='coolwarm',
+            xticklabels=p_hat_df.columns, yticklabels=p_hat_df.columns, 
+            ### increase font size
+            annot_kws={"size": 20}, fmt=".2f", linewidths=.5)
+plt.title("Correlation Heatmap of p_hat Across Factors")
+plt.tight_layout()
+plt.show()
+
+### creat a heatmap of NMF for each factor for correlation (30x30)
+nmf_matrix = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
+nmf_df = pd.DataFrame(nmf_matrix,
+                        columns=[f'NMF{i+1}' for i in range(nmf_matrix.shape[1])],
+                        index=[f'Sample_{i+1}' for i in range(nmf_matrix.shape[0])])
+plt.figure(figsize=(30, 25))
+sns.heatmap(nmf_df.corr(), annot=True, cmap='coolwarm',
+            xticklabels=nmf_df.columns, yticklabels=nmf_df.columns,
+            annot_kws={"size": 20}, fmt=".2f", linewidths=.5
+            )
+plt.title("Correlation Heatmap of NMF Scores Across Samples")
+plt.tight_layout()
+plt.show()
+
+for i in range(optimal_num_pcs_ks):
+    p_hat_i = results[i]['p_hat']
+    NMF_i = adata.obsm["X_nmf"][:, i]
+
+    ### plot p_hat vs NMF score for the first factor
+    plt.figure(figsize=(8, 6))
+    plt.scatter(NMF_i, p_hat_i, alpha=0.5, s=10)
+    plt.xlabel(f"NMF Factor {i+1} Score")
+    plt.ylabel("HiDDEN p_hat")
+    ### set phat range to 0-1
+    plt.ylim(0, 1)
+    plt.title(f"p_hat vs NMF Factor {i+1} Score")
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
+
+### create a heatmap correlation between p_hat and NMF scores for each factor
+### 30x30 - NMF scores x p_hat heatmap matrix
+n_factors = nmf_matrix.shape[1]
+correlation_matrix = np.corrcoef(nmf_matrix.T, p_hat_matrix.T)[:n_factors, n_factors:]  # shape: (30, 30)
+corr_df = pd.DataFrame(correlation_matrix,
+                       index=[f'p_hat_{i+1}' for i in range(n_factors)],
+                       columns=[f'NMF{i+1}' for i in range(n_factors)])
+
+plt.figure(figsize=(20, 12))
+sns.heatmap(corr_df, annot=True, cmap='coolwarm',
+            annot_kws={"size": 8}, fmt=".2f", linewidths=.5)
+plt.title("Correlation Between NMF Factors (x) and p_hat Factors (y)")
+plt.xlabel("NMF Factors")
+plt.ylabel("p_hat Factors")
+plt.tight_layout()
+plt.show()
+
+for result in results_LOF: #results_GOF
     print(f"Factor {result['factor_index'] + 1}:")
     factor_number = result['factor_index'] + 1
     print(f"  p_hat mean: {result['p_hat'].mean():.4f}")
@@ -251,7 +312,6 @@ for result in results_GOF:
     plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
     title_prefix="HiDDEN predictions", counter=factor_number, figsize=(42, 30), fontsize=45)
 
-    counter += 1
 
     df_violin = adata.obs[["sample_id", "p_hat"]].copy()
     plt.figure(figsize=(10, 5))

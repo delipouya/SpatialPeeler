@@ -25,9 +25,6 @@ from sklearn.exceptions import ConvergenceWarning
 import warnings
 warnings.simplefilter("ignore", category=ConvergenceWarning)
 
-
-import scanpy as sc
-import pandas as pd
 from scipy import io
 from scipy.sparse import csr_matrix
 
