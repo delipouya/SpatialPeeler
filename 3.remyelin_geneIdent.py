@@ -21,7 +21,7 @@ from SpatialPeeler import plotting as plot
 from SpatialPeeler import gene_identification as gid
 import pickle
 from gprofiler import GProfiler
-
+import pickle
 
 RAND_SEED = 28
 CASE_COND = 1
@@ -33,16 +33,19 @@ vis.visual_settings()
 ################################################
 ################### Importing results from pickle and Anndata ##################
 ################################################
-import pickle
 # Save
-#with open('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl', 'wb') as f:
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
+#with open(results_path, 'wb') as f:
 #    pickle.dump(results, f)
 # Load
-with open('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl', 'rb') as f:
+with open(results_path, 'rb') as f:
     results = pickle.load(f)
 
-adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
-adata.obs['sample_id'] = adata.obs['orig.ident']
+#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
+sample_ids = adata.obs['sample_id'].unique().tolist()
+
 
 adata.obs['sample_id'] = adata.obs['orig.ident']
 spatial = {'x': adata.obs['x'].values.astype(float).tolist(), 
@@ -50,9 +53,6 @@ spatial = {'x': adata.obs['x'].values.astype(float).tolist(),
 
 adata.obsm["spatial"] = pd.DataFrame(spatial, index=adata.obs.index).values
 sample_ids = adata.obs['orig.ident'].unique().tolist()
-
-
-
 
 ########################################################################
 ######################## Gene-Based analysis
