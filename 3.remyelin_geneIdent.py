@@ -33,9 +33,11 @@ vis.visual_settings()
 ################################################
 ################### Importing results from pickle and Anndata ##################
 ################################################
-# Save
+# read
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
+
 #with open(results_path, 'wb') as f:
 #    pickle.dump(results, f)
 # Load
@@ -43,22 +45,23 @@ with open(results_path, 'rb') as f:
     results = pickle.load(f)
 
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
-adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
+#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
+adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad')
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
 
-adata.obs['sample_id'] = adata.obs['orig.ident']
+#adata.obs['sample_id'] = adata.obs['orig.ident']
 spatial = {'x': adata.obs['x'].values.astype(float).tolist(), 
            'y': adata.obs['y'].values.astype(float).tolist()}
 
 adata.obsm["spatial"] = pd.DataFrame(spatial, index=adata.obs.index).values
-sample_ids = adata.obs['orig.ident'].unique().tolist()
+sample_ids = adata.obs['sample_id'].unique().tolist()
 
 ########################################################################
 ######################## Gene-Based analysis
 ########################################################################
 factor_idx = 14 # [1, 14, 12, 22, 26, 0]
-factor_idx = 2
+factor_idx = 5
 
 
 result = results[factor_idx] 
@@ -73,14 +76,14 @@ adata_by_sample = {
 }
 
 plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
-    title_prefix="HiDDEN predictions", counter=factor_idx+1)
+    title_prefix="HiDDEN predictions", counter=factor_idx+1, figsize=(45, 33), fontsize=45)
 
 plot.plot_grid(adata_by_sample, sample_ids, key="1_p_hat", 
-    title_prefix="HiDDEN predictions", counter=factor_idx+1)
+    title_prefix="HiDDEN predictions", counter=factor_idx+1, figsize=(45, 33), fontsize=45)
 
 
 #0:10 are diseased samples, 11:14 are normal samples 
-sample_id_to_check = 3 #5 11
+sample_id_to_check = 6
 an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
 
 
@@ -110,7 +113,8 @@ weighted_pearson_corr = gid.weighted_pearson_correlation_with_pattern(expr_matri
                                                                       gene_names=gene_names, 
                                                                       scale=True)
 
-symbols= weighted_pearson_corr['gene'].map(hlps.map_ensembl_to_symbol(weighted_pearson_corr['gene'].tolist()))
+symbols= weighted_pearson_corr['gene'].map(hlps.map_ensembl_to_symbol(weighted_pearson_corr['gene'].tolist(), 
+                                                                                 species='mouse'))
 weighted_pearson_corr['symbols'] = symbols
 
 regression_res = gid.regression_with_pattern(expr_matrix_sub, pattern_vector,
@@ -148,40 +152,45 @@ for key, cor_df in corr_dict.items():
         cor_df['gene'] = gene_names
     
     cor_df = cor_df.sort_values("correlation", ascending=False)
-    cor_df['symbol'] = cor_df['gene']
+    cor_df['symbol'] = cor_df['gene'].map(hlps.map_ensembl_to_symbol(cor_df['gene'].tolist(), 
+                                                                 species='mouse'))
+    cor_df = cor_df.dropna(subset=['symbol'])
+    cor_df = cor_df.reset_index(drop=True)
+    cor_df = cor_df[['gene', 'symbol', 'correlation']]
     print(f"Top 10 genes for {key}:")
     print(cor_df[['gene', 'correlation']].head(20).to_string(index=False))
     corr_dict[key] = cor_df
 
 
-num_genes_viz = 4
+num_genes_viz = 15
 top_genes = {}
 for key, cor_df in corr_dict.items():
-    top_genes[key] = cor_df.sort_values("correlation", ascending=False).head(num_genes_viz)[['symbol', 'correlation']]
+    top_genes[key] = cor_df.sort_values("correlation", ascending=False).head(num_genes_viz)[['gene','symbol', 'correlation']]
 top_genes
 
-
+num_genes_viz = 4
 for key, df in top_genes.items():
     for i in range(num_genes_viz):
         gene_symbol = df['symbol'].values[i]
         print(f"Top {i+1} gene for {key}: {gene_symbol}")
         # Plot the spatial distribution of the top genes
-        plot.plot_gene_spatial(an_adata_sample, df['symbol'].values[i], 
-                             title=f"{key} - {gene_symbol}", cmap="viridis")
+        plot_gene_spatial(an_adata_sample, df['gene'].values[i], 
+                             title=f"{key} - {gene_symbol}", cmap="viridis", figsize=(9, 7))
 
 
+i = 0 ## number of top genes to visualize
+key = 'Regression'  # or 'Pearson' or 'weighted_pearson'
 #4:7 are PSC samples, 0:3 are normal samples - initial analysis on sample #5, 4
-for sample_id_to_check in range(0, 4):
+for sample_id_to_check in range(len(sample_ids)):
     an_adata_sample_2 = adata_by_sample[sample_ids[sample_id_to_check]]
     print(f"Sample {sample_ids[sample_id_to_check]}:")
-    df = top_genes["Regression"]
-    i = 1
+    df = top_genes[key]
     gene_symbol = df['symbol'].values[i]
     print(f"Top {i+1} gene for {key}: {gene_symbol}")
-    plot.plot_gene_spatial(an_adata_sample_2, df['ensemble_id'].values[i], 
-                            title=f"{key} - {gene_symbol}", cmap="viridis")
+    plot_gene_spatial(an_adata_sample_2, df['gene'].values[i], 
+                            title=f"{sample_ids[sample_id_to_check]} - {key} - {gene_symbol}", cmap="viridis",figsize=(10, 8))
 
-x_axis = 'Regression'#'weighted_pearson'
+x_axis = 'weighted_pearson'#'weighted_pearson'
 y_axis = 'Pearson' 
 df_vis = pd.merge(corr_dict[x_axis], corr_dict[y_axis], on='symbol', how='inner')
 plt.figure(figsize=(5, 5))

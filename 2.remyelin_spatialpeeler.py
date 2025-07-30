@@ -33,7 +33,8 @@ utils.print_module_versions([sc, anndata, scvi, hiddensc])
 vis.visual_settings()
 
 
-adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
+#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
+adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad')
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 
 ### cropped data
@@ -78,15 +79,15 @@ for i in range(0, 3): #len(sample_ids)
 
 total_factors = adata.obsm["X_nmf"].shape[1]
 
-num_factors = 8
+num_factors = 10
 nmf_factors = adata.obsm['X_nmf'][:, :num_factors]
 nmf_df = pd.DataFrame(nmf_factors, 
                       columns=[f'NMF{i+1}' for i in range(nmf_factors.shape[1])])
 
-nmf_df['sample_id'] = adata.obs['sample_id'].values
-nmf_df['sample_id'] = adata.obs['Condition'].values
 nmf_df['sample_id'] = adata.obs['Animal'].values
 nmf_df['sample_id'] = adata.obs['Timepoint'].values
+nmf_df['sample_id'] = adata.obs['sample_id'].values
+nmf_df['sample_id'] = adata.obs['Condition'].values
 
 nmf_long = nmf_df.melt(id_vars='sample_id', 
                        var_name='Factor', 
@@ -110,6 +111,7 @@ plt.show()
 
 
 optimal_num_pcs_ks = total_factors
+print(f"Optimal number of PCs/KS: {optimal_num_pcs_ks}")
 # Set up HiDDEN input
 adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
 adata.obs['binary_label'] = adata.obs['Condition'].apply(lambda x: 1 if x == 'LPC' else 0)
@@ -142,7 +144,7 @@ coef_df = pd.DataFrame({
     'pval_intercept': pval_intercept_list
 })
 coef_df_sorted = coef_df.sort_values(by='coef', ascending=False)
-coef_df_sorted
+print(coef_df_sorted)
 
 ### draw histogram of coefficients
 plt.figure(figsize=(10, 6))
@@ -184,13 +186,15 @@ for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
 ################################################
 # Save
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
-#with open(results_path, 'wb') as f:
-#    pickle.dump(results, f)
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
+with open(results_path, 'wb') as f:
+    pickle.dump(results, f)
 # Load
+
+
 with open(results_path, 'rb') as f:
     results = pickle.load(f)
-
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
 sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -198,20 +202,18 @@ sample_ids = adata.obs['sample_id'].unique().tolist()
 
 
 ################################################
-
-# Store output for the best-performing factor (e.g., first one, or pick based on AUC)
-counter = 1
-result = results[24] #24
 ### cropped indices
 GOF_index = [1, 14, 12, 22, 26, 0]
 LOF_index = [2, 6, 13]
 
 #### uncropped indices
 GOF_index = [24, 20, 3, 2, 27, 17, 13, 9]
-#GOF_index = [24, 20]
-
 LOF_index = [11, 7, 23, 26, 29, 6, 12, 22]
-LOF_index = [11, 7, 23, 26]
+
+#### uncropped - sample-wise norm indices
+GOF_index = [0, 2, 5, 12, 6]
+LOF_index = [16, 8, 29, 13]
+
 
 print(GOF_index)
 results_LOF = [results[i] for i in LOF_index]

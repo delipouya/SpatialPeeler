@@ -112,7 +112,6 @@ H = nmf_model.components_        # factor × gene matrix
 adata_merged.obsm["X_nmf"] = W
 adata_merged.uns["nmf_components"] = H
 
-
 ### save adata object with NMF results  
 # file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
 # file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
