@@ -32,10 +32,12 @@ utils.set_random_seed(utils.RANDOM_SEED)
 utils.print_module_versions([sc, anndata, scvi, hiddensc])
 vis.visual_settings()
 
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
 
-#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
-adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad')
-#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+adata = sc.read_h5ad(file_name)
 
 ### cropped data
 adata.obs['Condition'].value_counts() 
@@ -174,9 +176,9 @@ plt.tight_layout()
 plt.show()
 
 
-########################  VISUALIZATION  ########################
+########################  VISUALIZATION  ######################## #(10,20)
 for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
-    plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
+    plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 6))
     #plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
 
 
@@ -187,7 +189,8 @@ for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
 # Save
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
 with open(results_path, 'wb') as f:
     pickle.dump(results, f)
 # Load
@@ -196,7 +199,7 @@ with open(results_path, 'wb') as f:
 with open(results_path, 'rb') as f:
     results = pickle.load(f)
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
-adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
+#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
 
@@ -213,6 +216,10 @@ LOF_index = [11, 7, 23, 26, 29, 6, 12, 22]
 #### uncropped - sample-wise norm indices
 GOF_index = [0, 2, 5, 12, 6]
 LOF_index = [16, 8, 29, 13]
+
+#### uncropped - t3_7 indices
+GOF_index = [21, 1, 9, 22, 24]
+LOF_index = [0, 27, 12, 5, 19]
 
 
 print(GOF_index)
@@ -288,7 +295,7 @@ plt.ylabel("p_hat Factors")
 plt.tight_layout()
 plt.show()
 
-for result in results_LOF: #results_GOF
+for result in results_GOF: #results_GOF
     print(f"Factor {result['factor_index'] + 1}:")
     factor_number = result['factor_index'] + 1
     print(f"  p_hat mean: {result['p_hat'].mean():.4f}")
@@ -310,11 +317,12 @@ for result in results_LOF: #results_GOF
     # For NMF factor  (from obsm)
     plot.plot_grid(adata_by_sample, sample_ids, key="X_nmf", 
     title_prefix="NMF Factor", counter=factor_number, from_obsm=True, 
-    factor_idx=factor_number-1, figsize=(45, 33), fontsize=45)
+    factor_idx=factor_number-1, figsize=(43, 15), fontsize=45) #figsize=(45, 33), fontsize=45
     
     # For p_hat #plot.
     plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
-    title_prefix="HiDDEN predictions", counter=factor_number, figsize=(42, 30), fontsize=45)
+    title_prefix="HiDDEN predictions", counter=factor_number, 
+    figsize=(43, 15), fontsize=45) #figsize=(42, 30), fontsize=45
 
 
     df_violin = adata.obs[["sample_id", "p_hat"]].copy()

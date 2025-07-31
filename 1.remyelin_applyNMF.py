@@ -38,11 +38,6 @@ root_dir = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq'
 
 #######################################
 #### importing the uncropped data  ####
-adata_merged = imp.load_all_slide_seq_data(root_dir, normalize_log1p=True) 
-adata_merged.X = adata_merged.layers['lognorm'].copy() # Use preprocessed layer (no additional log1p needed)
-sc.pp.highly_variable_genes(adata_merged, n_top_genes=2000, subset=True)
-
-
 base = "/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/all_final_cropped_pucks_standardpipeline"
 obs = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_metadata.csv", index_col=0)
 
@@ -58,10 +53,27 @@ metadata_df = metadata_df.reset_index(drop=True)
 duplicate_rows_mask = metadata_df.duplicated()
 metadata_df = metadata_df[~duplicate_rows_mask]
 
+LPC_t3_mask = (metadata_df['Timepoint'] == 3) & (metadata_df['Condition'] == 'LPC')
+sample_id_LPC_t3 = metadata_df[LPC_t3_mask]['sample_id'].values.tolist()
+
+Saline_t3_7_mask = (metadata_df['Timepoint'].isin([3,7])) & (metadata_df['Condition'] == 'Saline')
+sample_id_Saline_t3_7 = metadata_df[Saline_t3_7_mask]['sample_id'].values.tolist()
+
+sample_id_merged = sample_id_LPC_t3 + sample_id_Saline_t3_7
+print(metadata_df[metadata_df['sample_id'].isin(sample_id_merged)])
+
 print(metadata_df.head())
 print(metadata_df.shape)
+
+adata_merged = imp.load_all_slide_seq_data(root_dir, normalize_log1p=True) 
+adata_merged = adata_merged[adata_merged.obs['puck_id'].isin(sample_id_merged)]
+adata_merged.X = adata_merged.layers['lognorm'].copy() # Use preprocessed layer (no additional log1p needed)
+sc.pp.highly_variable_genes(adata_merged, n_top_genes=2000, subset=True)
+
+
 ### add medata to adata object based on the puck_id column
 adata_merged.obs = adata_merged.obs.merge(metadata_df, on='puck_id', how='left')
+adata_merged.obs['puck_id'].describe()
 print(adata_merged.obs.head())
 
 ########################################
@@ -115,5 +127,6 @@ adata_merged.uns["nmf_components"] = H
 ### save adata object with NMF results  
 # file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
 # file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
 adata_merged.write_h5ad(file_name)

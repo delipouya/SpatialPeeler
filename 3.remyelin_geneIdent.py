@@ -61,7 +61,7 @@ sample_ids = adata.obs['sample_id'].unique().tolist()
 ######################## Gene-Based analysis
 ########################################################################
 factor_idx = 14 # [1, 14, 12, 22, 26, 0]
-factor_idx = 5
+factor_idx = 29 #16 #8
 
 
 result = results[factor_idx] 
@@ -83,11 +83,11 @@ plot.plot_grid(adata_by_sample, sample_ids, key="1_p_hat",
 
 
 #0:10 are diseased samples, 11:14 are normal samples 
-sample_id_to_check = 6
+sample_id_to_check = 1#12#6
 an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
 
 
-PATTERN_COND = 'GOF'  # 'GOF' or 'LOF'
+PATTERN_COND = 'LOF'#'GOF'  # 'GOF' or 
 expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
 p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
 neg_p_hat_vector = an_adata_sample.obs['1_p_hat']  # shape: (n_spots,)
@@ -174,8 +174,8 @@ for key, df in top_genes.items():
         gene_symbol = df['symbol'].values[i]
         print(f"Top {i+1} gene for {key}: {gene_symbol}")
         # Plot the spatial distribution of the top genes
-        plot_gene_spatial(an_adata_sample, df['gene'].values[i], 
-                             title=f"{key} - {gene_symbol}", cmap="viridis", figsize=(9, 7))
+        plot.plot_gene_spatial(an_adata_sample, df['gene'].values[i], 
+                             title=f"{key} - {gene_symbol}", cmap="viridis", figsize=(11, 9))
 
 
 i = 0 ## number of top genes to visualize
@@ -187,8 +187,8 @@ for sample_id_to_check in range(len(sample_ids)):
     df = top_genes[key]
     gene_symbol = df['symbol'].values[i]
     print(f"Top {i+1} gene for {key}: {gene_symbol}")
-    plot_gene_spatial(an_adata_sample_2, df['gene'].values[i], 
-                            title=f"{sample_ids[sample_id_to_check]} - {key} - {gene_symbol}", cmap="viridis",figsize=(10, 8))
+    plot.plot_gene_spatial(an_adata_sample_2, df['gene'].values[i], 
+                            title=f"{sample_ids[sample_id_to_check]} - {key} - {gene_symbol}", cmap="viridis",figsize=(11, 9)) #figsize=(10, 8)
 
 x_axis = 'weighted_pearson'#'weighted_pearson'
 y_axis = 'Pearson' 

@@ -25,7 +25,7 @@ import warnings
 warnings.simplefilter("ignore", category=ConvergenceWarning)
 
 
-def plot_gene_spatial(adata, gene_id, title, cmap="viridis"):
+def plot_gene_spatial(adata, gene_id, title, cmap="viridis", figsize=(10, 10)):
     """Plot the expression of a single gene over spatial coordinates."""
     if gene_id not in adata.var_names:
         print(f"Gene {gene_id} not found in adata.var_names.")
@@ -33,7 +33,7 @@ def plot_gene_spatial(adata, gene_id, title, cmap="viridis"):
     gene_idx = adata.var_names.get_loc(gene_id)
     expr = adata.X[:, gene_idx].toarray().flatten() if hasattr(adata.X, "toarray") else adata.X[:, gene_idx]
     coords = adata.obsm["spatial"]
-    plt.figure(figsize=(5, 4))
+    plt.figure(figsize=figsize)
     plt.scatter(coords[:, 0], coords[:, 1], c=expr, cmap=cmap, s=10)
     plt.title(title)
     plt.axis("off")
@@ -84,7 +84,8 @@ def plot_spatial_p_hat(a, sample_id):
 
 
 
-def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
+def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx, 
+                                 figsize=(24, 20)):
     """
     Plot p_hat vs. NMF factor score for each sample in a grid.
     """
@@ -94,7 +95,7 @@ def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
     # Prepare layout
     n_cols = 4
     n_rows = int(np.ceil(len(sample_ids) / n_cols))
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(24, 20))
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=figsize)
     axs = axs.flatten()
 
     # Global scores
