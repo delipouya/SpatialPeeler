@@ -35,8 +35,9 @@ vis.visual_settings()
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
 adata = sc.read_h5ad(file_name)
 
 ### cropped data
@@ -158,7 +159,7 @@ plt.legend()
 plt.show()
 
 
-factor_id = 24
+factor_id = 18
 results[factor_id]['p_hat']  # p_hat for the first factor
 adata.obs['Condition']
 ### create a dataframe 
@@ -178,7 +179,7 @@ plt.show()
 
 ########################  VISUALIZATION  ######################## #(10,20)
 for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
-    plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 6))
+    plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(16, 10)) #(18, 6)
     #plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
 
 
