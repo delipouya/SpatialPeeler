@@ -33,20 +33,21 @@ vis.visual_settings()
 ################################################
 ################### Importing results from pickle and Anndata ##################
 ################################################
-# read
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
 
 #with open(results_path, 'wb') as f:
 #    pickle.dump(results, f)
-# Load
+
 with open(results_path, 'rb') as f:
     results = pickle.load(f)
 
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
-adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad')
+#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad')
+adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad')
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
 
@@ -60,8 +61,25 @@ sample_ids = adata.obs['sample_id'].unique().tolist()
 ########################################################################
 ######################## Gene-Based analysis
 ########################################################################
+
+### cropped indices
+GOF_index = [1, 14, 12, 22, 26, 0]
+LOF_index = [2, 6, 13]
+
+#### uncropped indices
+GOF_index = [24, 20, 3, 2, 27, 17, 13, 9]
+LOF_index = [11, 7, 23, 26, 29, 6, 12, 22]
+
+#### uncropped - sample-wise norm indices
+GOF_index = [0, 2, 5, 12, 6]
+LOF_index = [16, 8, 29, 13]
+
+#### uncropped - t3_7 indices
+GOF_index = [21, 1, 9, 22, 24]
+LOF_index = [0, 27, 12, 5, 19]
+################################################
 factor_idx = 14 # [1, 14, 12, 22, 26, 0]
-factor_idx = 29 #16 #8
+factor_idx = 0 #16 #8
 
 
 result = results[factor_idx] 
@@ -76,18 +94,20 @@ adata_by_sample = {
 }
 
 plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
-    title_prefix="HiDDEN predictions", counter=factor_idx+1, figsize=(45, 33), fontsize=45)
+    title_prefix="HiDDEN predictions", counter=factor_idx+1, 
+    figsize=(43, 15), fontsize=45) #figsize=(45, 33)
 
 plot.plot_grid(adata_by_sample, sample_ids, key="1_p_hat", 
-    title_prefix="HiDDEN predictions", counter=factor_idx+1, figsize=(45, 33), fontsize=45)
+    title_prefix="HiDDEN predictions", counter=factor_idx+1, 
+    figsize=(43, 15), fontsize=45) #figsize=(45, 33),
 
 
 #0:10 are diseased samples, 11:14 are normal samples 
-sample_id_to_check = 1#12#6
+sample_id_to_check = 0#12#6
 an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
 
 
-PATTERN_COND = 'LOF'#'GOF'  # 'GOF' or 
+PATTERN_COND = 'LOF'#'LOF'  # 'GOF' or 
 expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
 p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
 neg_p_hat_vector = an_adata_sample.obs['1_p_hat']  # shape: (n_spots,)
