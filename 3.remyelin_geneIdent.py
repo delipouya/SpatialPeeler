@@ -36,10 +36,8 @@ vis.visual_settings()
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
-
-#with open(results_path, 'wb') as f:
-#    pickle.dump(results, f)
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
 
 with open(results_path, 'rb') as f:
     results = pickle.load(f)
@@ -47,7 +45,9 @@ with open(results_path, 'rb') as f:
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad')
-adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad')
+#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad')
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+adata = sc.read_h5ad(file_name)
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
 
@@ -58,6 +58,12 @@ spatial = {'x': adata.obs['x'].values.astype(float).tolist(),
 adata.obsm["spatial"] = pd.DataFrame(spatial, index=adata.obs.index).values
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
+
+### select columns Condition and sample_id and make a unique table of two columns
+cond_sample_df = adata.obs[['Condition', 'sample_id']].drop_duplicates().reset_index(drop=True)
+cond_sample_df['Condition'] = cond_sample_df['Condition'].astype(str)
+cond_sample_df['sample_id'] = cond_sample_df['sample_id'].astype(str)
+cond_sample_df['Condition'] = cond_sample_df['Condition'].str.replace(' ', '_')
 ########################################################################
 ######################## Gene-Based analysis
 ########################################################################
@@ -77,9 +83,24 @@ LOF_index = [16, 8, 29, 13]
 #### uncropped - t3_7 indices
 GOF_index = [21, 1, 9, 22, 24]
 LOF_index = [0, 27, 12, 5, 19]
+
+#### uncropped - t18 indices
+GOF_index = [18, 12, 9, 20, 14]
+LOF_index = [3, 19, 23, 25]
 ################################################
-factor_idx = 14 # [1, 14, 12, 22, 26, 0]
-factor_idx = 0 #16 #8
+
+i = 3
+PATTERN_COND = 'GOF'#'LOF'  # 'GOF' or 
+factor_idx = LOF_index[i]
+
+if PATTERN_COND == 'GOF':
+    print("Using GOF pattern")
+    factor_idx = GOF_index[i]
+    print(f"Factor index for GOF: {factor_idx}")
+else:
+    print("Using LOF pattern")
+    factor_idx = LOF_index[i]
+    print(f"Factor index for LOF: {factor_idx}")
 
 
 result = results[factor_idx] 
@@ -95,7 +116,7 @@ adata_by_sample = {
 
 plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
     title_prefix="HiDDEN predictions", counter=factor_idx+1, 
-    figsize=(43, 15), fontsize=45) #figsize=(45, 33)
+    figsize=(43, 20), fontsize=45) #figsize=(45, 33) (43, 15)
 
 plot.plot_grid(adata_by_sample, sample_ids, key="1_p_hat", 
     title_prefix="HiDDEN predictions", counter=factor_idx+1, 
@@ -103,11 +124,10 @@ plot.plot_grid(adata_by_sample, sample_ids, key="1_p_hat",
 
 
 #0:10 are diseased samples, 11:14 are normal samples 
-sample_id_to_check = 0#12#6
+sample_id_to_check = 1#12#6
 an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
 
 
-PATTERN_COND = 'LOF'#'LOF'  # 'GOF' or 
 expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
 p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
 neg_p_hat_vector = an_adata_sample.obs['1_p_hat']  # shape: (n_spots,)
@@ -208,7 +228,8 @@ for sample_id_to_check in range(len(sample_ids)):
     gene_symbol = df['symbol'].values[i]
     print(f"Top {i+1} gene for {key}: {gene_symbol}")
     plot.plot_gene_spatial(an_adata_sample_2, df['gene'].values[i], 
-                            title=f"{sample_ids[sample_id_to_check]} - {key} - {gene_symbol}", cmap="viridis",figsize=(11, 9)) #figsize=(10, 8)
+                            title=f"{sample_ids[sample_id_to_check]} - {key} - {gene_symbol}", cmap="viridis",
+                            figsize=(13, 11)) #figsize=(10, 8) (11, 9)
 
 x_axis = 'weighted_pearson'#'weighted_pearson'
 y_axis = 'Pearson' 

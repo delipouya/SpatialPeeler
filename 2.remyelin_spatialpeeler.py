@@ -113,7 +113,7 @@ plt.show()
 #adata.uns["nmf_components"]
 
 
-optimal_num_pcs_ks = total_factors
+optimal_num_pcs_ks = 30
 print(f"Optimal number of PCs/KS: {optimal_num_pcs_ks}")
 # Set up HiDDEN input
 adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
@@ -191,10 +191,10 @@ for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
 with open(results_path, 'wb') as f:
     pickle.dump(results, f)
-# Load
 
 
 with open(results_path, 'rb') as f:
@@ -221,6 +221,10 @@ LOF_index = [16, 8, 29, 13]
 #### uncropped - t3_7 indices
 GOF_index = [21, 1, 9, 22, 24]
 LOF_index = [0, 27, 12, 5, 19]
+
+#### uncropped - t18 indices
+GOF_index = [18, 12, 9, 20, 14]
+LOF_index = [3, 19, 23, 25]
 
 
 print(GOF_index)
