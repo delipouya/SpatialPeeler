@@ -94,8 +94,8 @@ LOF_index = [3, 5, 7]
 
 ################################################
 
-i = 2
-PATTERN_COND = 'LOF'#'LOF'  # 'GOF' or 
+i = 1
+PATTERN_COND = 'GOF'#'LOF'  # 'GOF' or 
 factor_idx = LOF_index[i]
 
 if PATTERN_COND == 'GOF':
@@ -129,7 +129,7 @@ plot.plot_grid(adata_by_sample, sample_ids, key="1_p_hat",
 
 
 #0:10 are diseased samples, 11:14 are normal samples 
-sample_id_to_check = 3#1#12#6
+sample_id_to_check = 2#1#12#6
 an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
 
 
@@ -239,7 +239,7 @@ for sample_id_to_check in range(len(sample_ids)):
 x_axis = 'weighted_pearson'#'weighted_pearson'
 y_axis = 'Pearson' 
 df_vis = pd.merge(corr_dict[x_axis], corr_dict[y_axis], on='symbol', how='inner')
-plt.figure(figsize=(5, 5))
+plt.figure(figsize=(7, 7))
 plt.scatter(df_vis["correlation_x"], 
             df_vis["correlation_y"], alpha=0.4, s=10)
 plt.xlabel(x_axis + " Cor")
