@@ -5,6 +5,7 @@ sys.path.insert(0, root_path)
 import functools
 import numpy as np
 import scipy.sparse as sp
+import pandas as pd
 import hiddensc
 from hiddensc import utils, vis
 import scanpy as sc
@@ -15,22 +16,18 @@ import functools
 from sklearn.exceptions import ConvergenceWarning
 import warnings
 warnings.simplefilter("ignore", category=ConvergenceWarning)
-
-
+import matplotlib.pyplot as plt
 
 RAND_SEED = 28
 CASE_COND = 1
 np.random.seed(RAND_SEED)
-
 vis.visual_settings()
-
 
 # Files to load
 file_names = [
     "normal_A", "normal_B", "normal_C", "normal_D",
     "PSC_A", "PSC_B", "PSC_C", "PSC_D"
 ]
-
     
 adata_dict = {}
 cell_type_sets = {}
@@ -38,7 +35,7 @@ cell_type_sets = {}
 for fname in file_names:
     
     PREFIX = fname.split('.')[0]  # Use the first file name as prefix
-    at_data_dir = functools.partial(os.path.join, root_path,'SpatialPeeler','data_PSC')
+    at_data_dir = functools.partial(os.path.join, root_path,'SpatialPeeler','Data/PSC_liver/')
     adata = sc.read(at_data_dir(f'{PREFIX}.h5ad'))
     adata_dict[fname] = adata
 
@@ -116,7 +113,16 @@ for k in range(5, 31):
     case_mse_list.append(case_mse)
     control_mse_list.append(control_mse)
 
-import matplotlib.pyplot as plt
+
+# save the lists as a dataframe
+mse_df = pd.DataFrame({
+    'K': range(5, 31),
+    'Case MSE': case_mse_list,
+    'Control MSE': control_mse_list
+})
+mse_df.to_csv(os.path.join(root_path, 'SpatialPeeler', 'Data/PSC_liver', 
+                           'mse_nmf_factors.csv'), index=False)
+
 #X-axis: K, y-axis: MSE (case/control). Do the two lines become closer as the value of K gets bigger? 
 plt.figure(figsize=(10, 6))
 plt.plot(range(5, 31), case_mse_list, label='Case MSE', marker='o')
@@ -124,6 +130,18 @@ plt.plot(range(5, 31), control_mse_list, label='Control MSE', marker='o')
 plt.xlabel('Number of NMF Factors (K)')
 plt.ylabel('Mean Squared Error (MSE)')
 plt.title('MSE for Case and Control Groups vs Number of NMF Factors')
+plt.legend()
+plt.grid()
+plt.show()
+
+### plot the difference between the two lines
+plt.figure(figsize=(10, 7))
+plt.plot(range(5, 31), np.array(control_mse_list) -  np.array(case_mse_list) , 
+         label='Control - Case MSE', marker='o')
+plt.xlabel('Number of NMF Factors (K)')
+plt.ylabel('Difference in MSE (Control - Case)')
+plt.ylim([0, 200])
+plt.title('Difference in MSE for Control and Case Groups vs Number of NMF Factors')
 plt.legend()
 plt.grid()
 plt.show()

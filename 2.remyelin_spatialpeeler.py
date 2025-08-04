@@ -36,7 +36,8 @@ vis.visual_settings()
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
 
 adata = sc.read_h5ad(file_name)
 
@@ -113,7 +114,7 @@ plt.show()
 #adata.uns["nmf_components"]
 
 
-optimal_num_pcs_ks = 30
+optimal_num_pcs_ks = 10#30
 print(f"Optimal number of PCs/KS: {optimal_num_pcs_ks}")
 # Set up HiDDEN input
 adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
@@ -159,7 +160,7 @@ plt.legend()
 plt.show()
 
 
-factor_id = 18
+factor_id = 6#18
 results[factor_id]['p_hat']  # p_hat for the first factor
 adata.obs['Condition']
 ### create a dataframe 
@@ -192,7 +193,8 @@ for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18_K10.pkl'
 with open(results_path, 'wb') as f:
     pickle.dump(results, f)
 
@@ -225,6 +227,10 @@ LOF_index = [0, 27, 12, 5, 19]
 #### uncropped - t18 indices
 GOF_index = [18, 12, 9, 20, 14]
 LOF_index = [3, 19, 23, 25]
+
+#### uncropped - t18 K10 indices
+GOF_index = [6, 2, 0]
+LOF_index = [3, 5, 7]
 
 
 print(GOF_index)

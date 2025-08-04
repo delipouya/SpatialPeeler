@@ -116,7 +116,7 @@ sc.pp.scale(adata_merged, max_value=10, zero_center=True, layer='lognorm')
 # You can also use the `init='nndsvda'` option for better initialization
 # and set `max_iter` to a higher value for convergence.
 
-n_factors = 30  
+n_factors = 10#30  
 nmf_model = NMF(n_components=n_factors, init='nndsvda', 
                 random_state=RAND_SEED, max_iter=1000)
 # X must be dense; convert if sparse
@@ -134,6 +134,7 @@ adata_merged.uns["nmf_components"] = H
 # file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
 
 adata_merged.write_h5ad(file_name)

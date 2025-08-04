@@ -87,10 +87,15 @@ LOF_index = [0, 27, 12, 5, 19]
 #### uncropped - t18 indices
 GOF_index = [18, 12, 9, 20, 14]
 LOF_index = [3, 19, 23, 25]
+
+#### uncropped - t18 K10 indices
+GOF_index = [6, 2, 0]
+LOF_index = [3, 5, 7]
+
 ################################################
 
-i = 3
-PATTERN_COND = 'GOF'#'LOF'  # 'GOF' or 
+i = 2
+PATTERN_COND = 'LOF'#'LOF'  # 'GOF' or 
 factor_idx = LOF_index[i]
 
 if PATTERN_COND == 'GOF':
@@ -120,11 +125,11 @@ plot.plot_grid(adata_by_sample, sample_ids, key="p_hat",
 
 plot.plot_grid(adata_by_sample, sample_ids, key="1_p_hat", 
     title_prefix="HiDDEN predictions", counter=factor_idx+1, 
-    figsize=(43, 15), fontsize=45) #figsize=(45, 33),
+    figsize=(43, 20), fontsize=45) #figsize=(45, 33),
 
 
 #0:10 are diseased samples, 11:14 are normal samples 
-sample_id_to_check = 1#12#6
+sample_id_to_check = 3#1#12#6
 an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
 
 
@@ -239,6 +244,12 @@ plt.scatter(df_vis["correlation_x"],
             df_vis["correlation_y"], alpha=0.4, s=10)
 plt.xlabel(x_axis + " Cor")
 plt.ylabel(y_axis + " Cor")
+### add a diagonal line
+plt.plot([-1, 1], [-1, 1], color='red', linestyle='--', linewidth=1)
+plt.title(f"{x_axis} vs {y_axis} Correlation")
+plt.xlim(-1, 1)
+plt.ylim(-1, 1)
+plt.grid()
 plt.legend()
 plt.show()
 
