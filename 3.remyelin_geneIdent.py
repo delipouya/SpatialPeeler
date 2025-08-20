@@ -113,6 +113,12 @@ adata.obs['p_hat'] = result['p_hat']
 adata.obs['p_hat'] = adata.obs['p_hat'].astype('float32')
 adata.obs['1_p_hat'] = 1 - adata.obs['p_hat']
 
+
+## p-hat * NMF and see what it looks like
+adata.obs['p_hat_NMF'] = adata.obs['p_hat'] * adata.obsm["X_nmf"][:, factor_idx]
+
+
+
 sample_ids = adata.obs['sample_id'].unique().tolist()
 adata_by_sample = {
     sample_id: adata[adata.obs['sample_id'] == sample_id].copy()
@@ -126,6 +132,53 @@ plot.plot_grid(adata_by_sample, sample_ids, key="p_hat",
 plot.plot_grid(adata_by_sample, sample_ids, key="1_p_hat", 
     title_prefix="HiDDEN predictions", counter=factor_idx+1, 
     figsize=(43, 20), fontsize=45) #figsize=(45, 33),
+
+plot.plot_grid(adata_by_sample, sample_ids, key="p_hat_NMF", 
+    title_prefix="p-hat*NMF predictions", counter=factor_idx+1, 
+    figsize=(43, 20), fontsize=45) #figsize=(45, 33)
+
+
+### scatter plot of p_hat*NMF vs p_hat
+plt.figure(figsize=(8, 8))
+for sample_id in sample_ids:
+    an_adata_sample = adata_by_sample[sample_id]
+    plt.scatter(an_adata_sample.obs['p_hat'], 
+                an_adata_sample.obs['p_hat_NMF'], 
+                alpha=0.5, label=sample_id, s=10)
+plt.xlabel("p_hat")
+plt.ylabel("p_hat * NMF")
+plt.title("p_hat vs p_hat * NMF")
+plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid()
+plt.show()
+
+### scatter plot of p_hat*NMF vs NMF
+plt.figure(figsize=(8, 8))
+for sample_id in sample_ids:
+    an_adata_sample = adata_by_sample[sample_id]
+    plt.scatter(an_adata_sample.obsm["X_nmf"][:, factor_idx], 
+                an_adata_sample.obs['p_hat_NMF'], 
+                alpha=0.5, label=sample_id, s=10)
+plt.xlabel("NMF Factor")
+plt.ylabel("p_hat * NMF")
+plt.title("NMF Factor vs p_hat * NMF")
+plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid()
+plt.show()
+
+### scatter plot of p_hat vs NMF
+plt.figure(figsize=(8, 8))
+for sample_id in sample_ids:
+    an_adata_sample = adata_by_sample[sample_id]
+    plt.scatter(an_adata_sample.obsm["X_nmf"][:, factor_idx], 
+                an_adata_sample.obs['p_hat'], 
+                alpha=0.5, label=sample_id, s=10)
+plt.xlabel("NMF Factor")
+plt.ylabel("p_hat")
+plt.title("NMF Factor vs p_hat")
+plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid()
+plt.show()  
 
 
 #0:10 are diseased samples, 11:14 are normal samples 
@@ -239,7 +292,7 @@ for sample_id_to_check in range(len(sample_ids)):
 x_axis = 'weighted_pearson'#'weighted_pearson'
 y_axis = 'Pearson' 
 df_vis = pd.merge(corr_dict[x_axis], corr_dict[y_axis], on='symbol', how='inner')
-plt.figure(figsize=(7, 7))
+plt.figure(figsize=(8, 8))
 plt.scatter(df_vis["correlation_x"], 
             df_vis["correlation_y"], alpha=0.4, s=10)
 plt.xlabel(x_axis + " Cor")

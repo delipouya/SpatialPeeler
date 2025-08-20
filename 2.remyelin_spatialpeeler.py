@@ -7,8 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.sparse as sp
-import hiddensc
-from hiddensc import utils, vis
 import scanpy as sc
 import scvi
 import anndata
@@ -28,19 +26,16 @@ import pickle
 RAND_SEED = 28
 CASE_COND = 1
 np.random.seed(RAND_SEED)
-utils.set_random_seed(utils.RANDOM_SEED)
-utils.print_module_versions([sc, anndata, scvi, hiddensc])
-vis.visual_settings()
 
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
-#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
+adata_cropped = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 
 adata = sc.read_h5ad(file_name)
-
 ### cropped data
 adata.obs['Condition'].value_counts() 
 # LPC       28582
@@ -54,6 +49,8 @@ adata.obs['sample_id'] = adata.obs['puck_id']
 spatial = {'x': adata.obs['x'].values.astype(float).tolist(), 
            'y': adata.obs['y'].values.astype(float).tolist()}
 #adata.obsm["spatial"] = pd.DataFrame(spatial, index=adata.obs.index).values
+
+adata.obs['cropped'] = adata.obs['barcode'].isin(adata_cropped.obs['bead'])
 
 
 sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -72,7 +69,16 @@ metadata_df = pd.DataFrame(metadata, index=adata.obs.index)
 metadata_df = metadata_df.reset_index(drop=True)
 duplicate_rows_mask = metadata_df.duplicated()
 metadata_df = metadata_df[~duplicate_rows_mask]
-metadata_df
+print(metadata_df)
+
+# Plot spatial maps for the first 8 samples
+#for i in range(min(8, len(sample_ids))):
+#    plot_spatial_p_hat(adata_by_sample[sample_ids[i]], sample_ids[i])
+
+plot.plot_grid(adata_by_sample, sample_ids, key="cropped", 
+               title_prefix="Cropped regions", 
+               from_obsm=False, figsize=(43, 30), fontsize=45, 
+               dot_size=50) #figsize=(42, 30), fontsize=45
 
 for i in range(0, 3): #len(sample_ids)
     sid = sample_ids[i]
@@ -82,7 +88,6 @@ for i in range(0, 3): #len(sample_ids)
     plot.plot_spatial_nmf(adata_by_sample[sid], 2, sample_id=sid, figsize=(10, 10))
 
 total_factors = adata.obsm["X_nmf"].shape[1]
-
 num_factors = 10
 nmf_factors = adata.obsm['X_nmf'][:, :num_factors]
 nmf_df = pd.DataFrame(nmf_factors, 
@@ -114,7 +119,7 @@ plt.show()
 #adata.uns["nmf_components"]
 
 
-optimal_num_pcs_ks = 10#30
+optimal_num_pcs_ks = 30
 print(f"Optimal number of PCs/KS: {optimal_num_pcs_ks}")
 # Set up HiDDEN input
 adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
@@ -178,12 +183,13 @@ plt.tight_layout()
 plt.show()
 
 
+cropped_status = ['black' if x else  'yellow' for x in adata.obs['cropped'].values]
 ########################  VISUALIZATION  ######################## #(10,20)
 for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
-    plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(16, 10)) #(18, 6)
+    #plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(16, 10), color_vector=cropped_status) #(18, 6)
     #plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
-
-
+    plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 10), 
+                                     color_vector=cropped_status) #(18, 6)
 
 ################################################
 ################### Importing results from pickle and Anndata ##################
@@ -192,11 +198,11 @@ for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
-#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18_K10.pkl'
-with open(results_path, 'wb') as f:
-    pickle.dump(results, f)
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18_K10.pkl'
+#with open(results_path, 'wb') as f:
+#    pickle.dump(results, f)
 
 
 with open(results_path, 'rb') as f:
@@ -250,36 +256,20 @@ p_hat_df = pd.DataFrame(p_hat_matrix.T,
                         columns=[f'Factor_{i+1}' for i in range(len(results))],
                         index=[f'Sample_{i+1}' for i in range(p_hat_matrix.shape[1])])
 
-plt.figure(figsize=(30, 25))
-sns.heatmap(p_hat_df.corr(), annot=True, cmap='coolwarm',
-            xticklabels=p_hat_df.columns, yticklabels=p_hat_df.columns, 
-            ### increase font size
-            annot_kws={"size": 20}, fmt=".2f", linewidths=.5)
-plt.title("Correlation Heatmap of p_hat Across Factors")
-plt.tight_layout()
-plt.show()
-
 ### creat a heatmap of NMF for each factor for correlation (30x30)
 nmf_matrix = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
 nmf_df = pd.DataFrame(nmf_matrix,
                         columns=[f'NMF{i+1}' for i in range(nmf_matrix.shape[1])],
                         index=[f'Sample_{i+1}' for i in range(nmf_matrix.shape[0])])
-plt.figure(figsize=(30, 25))
-sns.heatmap(nmf_df.corr(), annot=True, cmap='coolwarm',
-            xticklabels=nmf_df.columns, yticklabels=nmf_df.columns,
-            annot_kws={"size": 20}, fmt=".2f", linewidths=.5
-            )
-plt.title("Correlation Heatmap of NMF Scores Across Samples")
-plt.tight_layout()
-plt.show()
 
 for i in range(optimal_num_pcs_ks):
     p_hat_i = results[i]['p_hat']
     NMF_i = adata.obsm["X_nmf"][:, i]
+    cropped_status = ['black' if x else  'yellow' for x in adata.obs['cropped'].values]
 
     ### plot p_hat vs NMF score for the first factor
-    plt.figure(figsize=(8, 6))
-    plt.scatter(NMF_i, p_hat_i, alpha=0.5, s=10)
+    plt.figure(figsize=(6, 6))
+    plt.scatter(NMF_i, p_hat_i, c=cropped_status, alpha=0.7, s=3)
     plt.xlabel(f"NMF Factor {i+1} Score")
     plt.ylabel("HiDDEN p_hat")
     ### set phat range to 0-1
@@ -306,7 +296,7 @@ plt.ylabel("p_hat Factors")
 plt.tight_layout()
 plt.show()
 
-for result in results_GOF: #results_GOF
+for result in results_LOF: #results_GOF
     print(f"Factor {result['factor_index'] + 1}:")
     factor_number = result['factor_index'] + 1
     print(f"  p_hat mean: {result['p_hat'].mean():.4f}")
@@ -324,20 +314,33 @@ for result in results_GOF: #results_GOF
     # Plot spatial maps for the first 8 samples
     #for i in range(min(8, len(sample_ids))):
     #    plot_spatial_p_hat(adata_by_sample[sample_ids[i]], sample_ids[i])
-    
+    adata_by_sample_cropped = {}
+    ### subset the adata_by sample elements by "cropped" in .obs
+
+    for sample_id, adata_sample in adata_by_sample.items():
+        adata_by_sample_cropped[sample_id] = adata_sample[adata_sample.obs['cropped'] == True]
+
     # For NMF factor  (from obsm)
     plot.plot_grid(adata_by_sample, sample_ids, key="X_nmf", 
-    title_prefix="NMF Factor", counter=factor_number, from_obsm=True, 
-    factor_idx=factor_number-1, figsize=(43, 15), fontsize=45) #figsize=(45, 33), fontsize=45
+    title_prefix=f" Factor {result['factor_index'] + 1}- " + "NMF ", counter=factor_number, from_obsm=True, 
+    factor_idx=factor_number-1, figsize=(43, 20), fontsize=45, dot_size=30) #figsize=(45, 15), fontsize=45
+
+    plot.plot_grid(adata_by_sample_cropped, sample_ids, key="X_nmf", 
+    title_prefix=f" Factor {result['factor_index'] + 1}- " + "NMF ", counter=factor_number, from_obsm=True, 
+    factor_idx=factor_number-1, figsize=(43, 20), fontsize=45, dot_size=100) #figsize=(45, 33), fontsize=45
     
     # For p_hat #plot.
     plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
-    title_prefix="HiDDEN predictions", counter=factor_number, 
-    figsize=(43, 15), fontsize=45) #figsize=(42, 30), fontsize=45
+    title_prefix=f" Factor {result['factor_index'] + 1}- " + "HiDDEN predictions", counter=factor_number, 
+    figsize=(43, 20), fontsize=45, dot_size=30) #figsize=(42, 30), fontsize=45
+
+    plot.plot_grid(adata_by_sample_cropped, sample_ids, key="p_hat", 
+    title_prefix=f" Factor {result['factor_index'] + 1}- " + "HiDDEN predictions", counter=factor_number, 
+    figsize=(43, 20), fontsize=45, dot_size=100) #figsize=(42, 30), fontsize=45
 
 
     df_violin = adata.obs[["sample_id", "p_hat"]].copy()
-    plt.figure(figsize=(10, 5))
+    plt.figure(figsize=(5, 7))
     sns.violinplot(
         x="sample_id", y="p_hat", hue="sample_id", data=df_violin,
         palette="Set2", density_norm="width", inner=None, legend=False
@@ -347,16 +350,36 @@ for result in results_GOF: #results_GOF
         color="white", width=0.1, fliersize=0
     )
     plt.xticks(rotation=45, ha="right")
-    plt.title("Distribution of p_hat per sample")
+    plt.title(f" Factor {result['factor_index'] + 1}- " + "Distribution of p_hat (uncropped)" , fontsize=13)
+    plt.ylim(0, 1)
+    plt.tight_layout()
+    plt.show()
+
+    df_violin_cropped = df_violin[adata.obs['cropped'] == True].copy()
+    plt.figure(figsize=(5, 7))
+    sns.violinplot(
+        x="sample_id", y="p_hat", hue="sample_id", data=df_violin_cropped,
+        palette="Set2", density_norm="width", inner=None, legend=False
+    )
+    sns.boxplot(
+        x="sample_id", y="p_hat", data=df_violin_cropped,
+        color="white", width=0.1, fliersize=0
+    )
+    plt.xticks(rotation=45, ha="right")
+    plt.title(f" Factor {result['factor_index'] + 1}- " + "Distribution of p_hat (cropped)", fontsize=13)
+    plt.ylim(0, 1)
     plt.tight_layout()
     plt.show()
 
 
-
+######################################################
 ###### for all factors, plot p-hat vs nmf score as a scatter plot
 for i in range(optimal_num_pcs_ks):
     nmf_scores = adata.obsm["X_nmf"][:, i]
     p_hat = results[i]['p_hat']  # p_hat for the i-th factor
+
+    #nmf_scores = nmf_scores[adata.obs['cropped'] == True]
+    #p_hat = p_hat[adata.obs['cropped'] == True]
 
     plt.figure(figsize=(8, 6))
     plt.scatter(nmf_scores, p_hat, alpha=0.5, s=10)
@@ -385,3 +408,48 @@ for i in range(optimal_num_pcs_ks):
     plt.tight_layout()
     plt.show()
 
+
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import LabelEncoder
+######################################################
+############ Identifying Informative factor ############
+# --- Logistic regression on varimax PCs ---
+X = adata.obsm['X_nmf']
+y = LabelEncoder().fit_transform(adata.obs['Condition'].values)
+model = LogisticRegression(penalty=None, solver='lbfgs', max_iter=1000)
+model.fit(X, y)
+coefs = model.coef_[0]
+nmf_labels = [f'NMF{i+1}' for i in range(X.shape[1])]
+importance_df = pd.DataFrame({
+    'Factor': nmf_labels,
+    'Coefficient': coefs,
+    'AbsCoefficient': np.abs(coefs)
+}).sort_values(by='AbsCoefficient', ascending=False)
+
+plt.figure(figsize=(10, 7))
+sns.barplot(x='Factor', y='AbsCoefficient', data=importance_df.head(15), palette="viridis")
+plt.title("Top 15 Most Informative NMFs for Predicting Disease")
+plt.ylabel("Abs Logistic Regression Coef")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+# --- Top NMF visualization ---
+cropped = True
+top5_nmf = importance_df['Factor'].head(6).tolist()
+top5_indices = [int(f[3:]) - 1 for f in top5_nmf]
+top5_df = pd.DataFrame(adata.obsm["X_nmf"][:, top5_indices], columns=top5_nmf)
+top5_df["sample_id"] = adata.obs["Condition"].values #Condition
+if cropped:
+    top5_df = top5_df[adata.obs['cropped'].values].copy()
+top5_long = top5_df.melt(id_vars="sample_id", var_name="Factor", value_name="Score")
+plt.figure(figsize=(23, 8))
+sns.violinplot(x="Factor", y="Score", hue="sample_id", data=top5_long, inner="box", palette="Set2")
+if cropped:
+    plt.title("Distribution of Top 6 Informative NMF Factors Across Samples (Cropped Regions)")
+else:
+    plt.title("Distribution of Top 6 Informative NMF Factors Across Samples")
+plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc="upper left")
+plt.tight_layout()
+plt.show()

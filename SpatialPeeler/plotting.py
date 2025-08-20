@@ -10,7 +10,8 @@ from hiddensc import utils, vis
 import scanpy as sc
 import scvi
 import anndata
-
+import matplotlib.pyplot as plt
+import numpy as np
 
 #from scipy.stats import mannwhitneyu
 RAND_SEED = 28
@@ -84,13 +85,11 @@ def plot_spatial_p_hat(a, sample_id):
 
 
 
-def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx, 
+def plot_p_hat_vs_nmf_by_sample_naive(adata, results, sample_ids, factor_idx, color_vector=None,
                                  figsize=(24, 20)):
     """
     Plot p_hat vs. NMF factor score for each sample in a grid.
     """
-    import matplotlib.pyplot as plt
-    import numpy as np
 
     # Prepare layout
     n_cols = 4
@@ -109,12 +108,78 @@ def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx,
 
         nmf_scores = nmf_scores_all[idx]
         p_hat = p_hat_all[idx]
+        ### subset color_vector based on sample_mask (series)
+        color_vector_idx = np.asarray(color_vector)[sample_mask.to_numpy()]
 
-        axs[i].scatter(nmf_scores, p_hat, alpha=0.5, s=10)
+        axs[i].scatter(nmf_scores, p_hat, c=color_vector_idx,alpha=0.5, s=10)
         axs[i].set_title(sid, fontsize=18)
         axs[i].set_xlabel(f"NMF Factor {factor_idx + 1}", fontsize=20)
         axs[i].set_ylabel("p_hat", fontsize=20)
         axs[i].set_ylim(0, 1) ## fix the range
+        axs[i].grid(True)
+
+    # Turn off unused plots
+    for j in range(i + 1, len(axs)):
+        axs[j].axis("off")
+
+    plt.suptitle(f"p_hat vs NMF Factor {factor_idx + 1} by sample", fontsize=23)
+    plt.tight_layout(rect=[0, 0, 0.9, 0.95])
+    plt.show()
+
+
+def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx, color_vector=None,
+                                figsize=(24, 20)):
+    """
+    Plot p_hat vs. NMF factor score for each sample in a grid.
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    n = len(sample_ids)
+    # ---- grid logic  ----
+    if n == 6:
+        n_cols = 3
+    else:
+        n_cols = min(4, int(np.ceil(np.sqrt(n))))
+        if n == 5:
+            n_cols = 3
+        if n > 4 and n % 3 == 0:
+            n_cols = min(n_cols, 3)
+    n_rows = int(np.ceil(n / n_cols))
+
+    # scale fig size a bit with grid
+    base_w, base_h = figsize
+    fig_w = base_w * (n_cols / 4)
+    fig_h = base_h * (n_rows / 2)
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(fig_w, fig_h))
+    axs = np.atleast_1d(axs).ravel()
+
+    # Global scores
+    nmf_scores_all = adata.obsm["X_nmf"][:, factor_idx]
+    p_hat_all = results[factor_idx]["p_hat"]
+
+    # pre-coerce color_vector once if provided
+    if color_vector is not None:
+        color_vector = np.asarray(color_vector)
+
+    for i, sid in enumerate(sample_ids):
+        sample_mask = (adata.obs["sample_id"] == sid)
+        idx = np.where(sample_mask)[0]
+
+        nmf_scores = nmf_scores_all[idx]
+        p_hat = p_hat_all[idx]
+
+        if color_vector is not None:
+            # boolean mask to select colors for this sample
+            color_vector_idx = color_vector[sample_mask.to_numpy()]
+            axs[i].scatter(nmf_scores, p_hat, c=color_vector_idx, alpha=0.5, s=10)
+        else:
+            axs[i].scatter(nmf_scores, p_hat, alpha=0.5, s=10)
+
+        axs[i].set_title(sid, fontsize=18)
+        axs[i].set_xlabel(f"NMF Factor {factor_idx + 1}", fontsize=20)
+        axs[i].set_ylabel("p_hat", fontsize=20)
+        axs[i].set_ylim(0, 1)
         axs[i].grid(True)
 
     # Turn off unused plots
@@ -168,9 +233,77 @@ def plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
     plt.show()
 
 
+def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter=None, 
+              from_obsm=False, factor_idx=None, figsize=(16, 8), fontsize=10, 
+              factor_wise=False, dot_size=10):
 
-def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter, 
-              from_obsm=False, factor_idx=None, figsize=(16, 8), fontsize=10):
+    # collect values across samples for a shared color scale
+    if from_obsm and factor_idx is not None:
+        all_vals = np.concatenate([adata_by_sample[s].obsm[key][:, factor_idx] for s in sample_ids])
+    else:
+        all_vals = np.concatenate([adata_by_sample[s].obs[key].values for s in sample_ids])
+    vmin, vmax = np.min(all_vals), np.max(all_vals)
+
+    # ---- grid logic ----
+    n = len(sample_ids)
+    if n == 6:
+        n_cols = 3
+    else:
+        # prefer a near-square layout, but cap at 4 columns
+        n_cols = min(4, int(np.ceil(np.sqrt(n))))
+        # if 5 samples, 3 columns looks nicer than 2x3 with an empty slot
+        if n == 5:
+            n_cols = 3
+        # if divisible by 3 and >4, a 3-col layout is often cleaner than 4
+        if n > 4 and n % 3 == 0:
+            n_cols = min(n_cols, 3)
+    n_rows = int(np.ceil(n / n_cols))
+
+    # scale figure size roughly with grid
+    base_w, base_h = figsize
+    fig_w = base_w * (n_cols / 4)
+    fig_h = base_h * (n_rows / 2)
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(fig_w, fig_h))
+    axs = np.atleast_1d(axs).ravel()
+
+    # ---- plotting ----
+    last_im = None
+    for i, sid in enumerate(sample_ids):
+        ad = adata_by_sample[sid]
+        coords = ad.obsm["spatial"]
+        values = ad.obsm[key][:, factor_idx] if (from_obsm and factor_idx is not None) else ad.obs[key].values
+
+        last_im = axs[i].scatter(coords[:, 0], coords[:, 1],
+                                 c=values, cmap="viridis", s=dot_size,
+                                 vmin=vmin, vmax=vmax)
+        axs[i].set_title(sid, fontsize=fontsize)
+        axs[i].axis("off")
+
+    # hide any unused axes
+    for j in range(i + 1, len(axs)):
+        axs[j].axis("off")
+
+    # ---- shared colorbar with larger tick labels ----
+    cbar_ax = fig.add_axes([0.92, 0.25, 0.015, 0.5])
+    cb = fig.colorbar(last_im, cax=cbar_ax)
+    cb.ax.tick_params(labelsize=fontsize)              # set on cb.ax (the real cbar axis)
+    cb.set_label(key.replace("_", " ").title(), fontsize=fontsize + 2)
+
+    # ---- title ----
+    if factor_wise:
+        suptitle = f"{title_prefix} across spatial coordinates for factor {counter}"
+    else:
+        suptitle = f"{title_prefix} across spatial coordinates"
+    plt.suptitle(suptitle, fontsize=fontsize + 3)
+
+    plt.tight_layout(rect=[0, 0, 0.9, 0.95])
+    plt.show()
+
+
+
+def plot_grid_naive(adata_by_sample, sample_ids, key, title_prefix, counter=None, 
+              from_obsm=False, factor_idx=None, figsize=(16, 8), fontsize=10, 
+              factor_wise=False, dot_size=10):
     """
     Plots a spatial grid of actual (unclipped) values from .obs or .obsm.
 
@@ -182,6 +315,7 @@ def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter,
     - counter: factor index (for labeling)
     - from_obsm: if True, extract from .obsm using key and factor_idx
     - factor_idx: index of the factor (only needed for .obsm values)
+    - factor_wise: is the plot factor-wise or not (True/False)
     """
     # Collect all values across samples
     if from_obsm and factor_idx is not None:
@@ -218,7 +352,7 @@ def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter,
             coords[:, 0], coords[:, 1],
             c=values,
             cmap="viridis",
-            s=10,
+            s=dot_size,
             vmin=vmin,
             vmax=vmax
         )
@@ -227,14 +361,17 @@ def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter,
 
     # Shared colorbar
     cbar_ax = fig.add_axes([0.92, 0.25, 0.015, 0.5])
+    
     ### increase fontsize of colorbar
     cbar_ax.tick_params(labelsize=fontsize)
     cb = fig.colorbar(im, cax=cbar_ax)
     # Set label with increased fontsize
     cb.set_label(key.replace("_", " ").title(), fontsize=fontsize+2)
-
     # Title
-    plt.suptitle(f"{title_prefix} across spatial coordinates for factor {counter}", fontsize=fontsize+3)
+    if factor_wise:
+        plt.suptitle(f"{title_prefix} across spatial coordinates for factor {counter}", fontsize=fontsize+3)
+    else:
+        plt.suptitle(f"{title_prefix} across spatial coordinates", fontsize=fontsize+3)
     plt.tight_layout(rect=[0, 0, 0.9, 0.95])
     plt.show()
 
