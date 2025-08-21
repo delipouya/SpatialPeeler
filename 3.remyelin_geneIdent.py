@@ -45,7 +45,7 @@ with open(results_path, 'rb') as f:
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad')
-#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad')
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
 file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 adata = sc.read_h5ad(file_name)
 sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -94,7 +94,7 @@ LOF_index = [3, 5, 7]
 
 ################################################
 
-i = 1
+i = 0
 PATTERN_COND = 'GOF'#'LOF'  # 'GOF' or 
 factor_idx = LOF_index[i]
 
@@ -265,6 +265,71 @@ top_genes = {}
 for key, cor_df in corr_dict.items():
     top_genes[key] = cor_df.sort_values("correlation", ascending=False).head(num_genes_viz)[['gene','symbol', 'correlation']]
 top_genes
+
+print(top_genes['Pearson'])
+
+
+import dataframe_image as dfi
+
+#factor_idx = GOF_index[2]
+PATTERN_COND = 'GOF'#'LOF'  # 'GOF' or 
+
+for factor_idx in GOF_index:
+    factor_name = f'NMF{factor_idx + 1}'
+    print(f"Top genes for p-hat {factor_name}:")
+
+    if PATTERN_COND == 'GOF':
+        print("Using GOF pattern")
+        print(f"Factor index for GOF: {factor_idx}")
+    else:
+        print("Using LOF pattern")
+        print(f"Factor index for LOF: {factor_idx}")
+
+    result = results[factor_idx] 
+    adata.obs['p_hat'] = result['p_hat']
+    adata.obs['p_hat'] = adata.obs['p_hat'].astype('float32')
+    adata.obs['1_p_hat'] = 1 - adata.obs['p_hat']
+
+    #sample_id_to_check = 2#1#12#6
+    #an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
+    an_adata_sample = adata
+    expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
+    p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
+    neg_p_hat_vector = an_adata_sample.obs['1_p_hat']  # shape: (n_spots,)
+    pattern_vector = p_hat_vector if PATTERN_COND == 'GOF' else neg_p_hat_vector
+
+    #### removing genes with zero variance
+    gene_zero_std_index = np.std(expr_matrix, axis=0) == 0
+    expr_matrix_sub = expr_matrix[:, ~gene_zero_std_index]  # Exclude genes with zero variance
+    gene_names = an_adata_sample.var_names[~gene_zero_std_index]
+    pearson_corr = gid.pearson_correlation_with_pattern(expr_matrix_sub, pattern_vector, 
+                                                        gene_names=gene_names)
+    
+    if 'gene' not in pearson_corr.columns:
+        pearson_corr['gene'] = gene_names
+
+    pearson_corr = pearson_corr.sort_values("correlation", ascending=False)
+    pearson_corr['symbol'] = pearson_corr['gene'].map(hlps.map_ensembl_to_symbol(pearson_corr['gene'].tolist(), 
+                                                                 species='mouse'))
+    pearson_corr = pearson_corr.dropna(subset=['symbol'])
+    pearson_corr = pearson_corr.reset_index(drop=True)
+    pearson_corr = pearson_corr[['symbol', 'correlation']]
+    pearson_corr.columns = ['Gene', 'phat_F'+str(factor_idx+1)]
+
+    # Apply styling to set the background color to white
+    styled_df = pearson_corr.head(35).style.set_properties(**{'background-color': 'white'})
+    styled_df = styled_df.set_properties(**{'color': 'black'})
+    styled_df
+    # Export the styled DataFrame to a PNG file
+    #outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t3_7_phat_{factor_idx+1}_genes_df.png"
+    outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t18_phat_{factor_idx+1}_genes_df.png"
+    dfi.export(
+        styled_df,
+        outpath,
+        table_conversion="matplotlib",  
+        dpi=300
+    )
+
 
 num_genes_viz = 4
 for key, df in top_genes.items():

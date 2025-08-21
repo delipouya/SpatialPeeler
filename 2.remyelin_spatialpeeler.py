@@ -30,8 +30,8 @@ np.random.seed(RAND_SEED)
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
-#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
 adata_cropped = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 
@@ -183,12 +183,12 @@ plt.tight_layout()
 plt.show()
 
 
-cropped_status = ['black' if x else  'yellow' for x in adata.obs['cropped'].values]
 ########################  VISUALIZATION  ######################## #(10,20)
+cropped_status = ['black' if x else  'yellow' for x in adata.obs['cropped'].values]
 for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
     #plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(16, 10), color_vector=cropped_status) #(18, 6)
     #plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
-    plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 10), 
+    plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 10), 
                                      color_vector=cropped_status) #(18, 6)
 
 ################################################
@@ -453,3 +453,48 @@ else:
 plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc="upper left")
 plt.tight_layout()
 plt.show()
+
+
+import dataframe_image as dfi
+################ Identifying the top genes associated with factors
+#### uncropped - t3_7 indices
+GOF_index = [21, 1, 9, 22, 24]
+LOF_index = [0, 27, 12, 5, 19]
+
+#### uncropped - t18 indices
+GOF_index = [18, 12, 9, 20, 14]
+LOF_index = [3, 19, 23, 25]
+
+
+NMF_H = pd.DataFrame(adata.uns["nmf_components"]).T
+NMF_H.columns = [f'NMF{i+1}' for i in range(NMF_H.shape[1])]
+NMF_H['genes'] = adata.var_names
+print(NMF_H.shape)
+symbols= NMF_H['genes'].map(hlps.map_ensembl_to_symbol(NMF_H['genes'].tolist(), species='mouse'))
+print(symbols.head(10))
+NMF_H['symbols'] = symbols
+print(NMF_H.head(10))
+
+for index in GOF_index + LOF_index:
+    factor_name = f'NMF{index + 1}'
+    print(f"Top genes for {factor_name}:")
+    ### make a df of the gene symbol and the factor name and sort it
+    gene_df = pd.DataFrame({
+    'symbols': NMF_H['symbols'],
+    factor_name: NMF_H[factor_name]
+    })
+    gene_df.sort_values(by=factor_name, ascending=False, inplace=True)
+    gene_df.reset_index(drop=True, inplace=True)
+    # Apply styling to set the background color to white
+    styled_df = gene_df.head(35).style.set_properties(**{'background-color': 'white'})
+    styled_df = styled_df.set_properties(**{'color': 'black'})
+    styled_df
+    # Export the styled DataFrame to a PNG file
+    #outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t3_7_NMF{index+1}_genes_df.png"
+    outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t18_NMF{index+1}_genes_df.png"
+    dfi.export(
+        styled_df,
+        outpath,
+        table_conversion="matplotlib",  
+        dpi=300
+    )
