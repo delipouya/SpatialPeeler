@@ -156,7 +156,7 @@ LOF_index = [3, 9, 11, 21, 13, 4, 15, 10]
 ########################  VISUALIZATION  ########################
 for i in GOF_index+LOF_index: #optimal_num_pcs_ks
     plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 10))
-    #plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
+    plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
 
 
 

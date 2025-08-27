@@ -151,3 +151,5 @@ spatial_corr = gid.spatial_weighted_correlation_matrix(expr_matrix, pattern_vect
 
 ################################################################
 
+
+
