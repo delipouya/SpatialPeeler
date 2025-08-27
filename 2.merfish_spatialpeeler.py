@@ -25,13 +25,12 @@ RAND_SEED = 28
 CASE_COND = 1
 np.random.seed(RAND_SEED)
 
+
 outp = "/home/delaram/SpatialPeeler/Data/MERFISH_polyomavirus/merged_adata_infected_sham_allnorm_NMF30.h5ad"
 adata = sc.read_h5ad(outp)
-
 adata.obs['Condition'].value_counts()
 adata.obs['sample_id'].value_counts()
-
-adata.obsm
+print(adata.obsm)
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
 # Create a dictionary splitting the merged data by sample
@@ -155,8 +154,9 @@ LOF_index = [3, 9, 11, 21, 13, 4, 15, 10]
 
 ########################  VISUALIZATION  ########################
 for i in GOF_index+LOF_index: #optimal_num_pcs_ks
-    plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 10))
-    plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
+    #plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 10))
+    plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, 
+                                           factor_idx=i, figsize=(18, 10))
 
 
 
