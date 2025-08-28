@@ -10,8 +10,9 @@ from hiddensc import utils, vis
 import scanpy as sc
 import scvi
 import anndata
-import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 #from scipy.stats import mannwhitneyu
 RAND_SEED = 28
@@ -89,6 +90,7 @@ def plot_p_hat_vs_nmf_by_sample_naive(adata, results, sample_ids, factor_idx, co
                                  figsize=(24, 20)):
     """
     Plot p_hat vs. NMF factor score for each sample in a grid.
+    naive version: does not customize the grid layout based on the number of samples provided 
     """
 
     # Prepare layout
@@ -131,9 +133,8 @@ def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx, color_ve
                                 figsize=(24, 20)):
     """
     Plot p_hat vs. NMF factor score for each sample in a grid.
+    customizes the grid layout based on the number of samples provided 
     """
-    import numpy as np
-    import matplotlib.pyplot as plt
 
     n = len(sample_ids)
     # ---- grid logic  ----
@@ -191,20 +192,38 @@ def plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx, color_ve
     plt.show()
 
 
-def plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
+def safe_logit(p, eps=1e-5):
+        # Avoid division by zero or log(0)
+        p = np.where(p == 0, eps, p)
+        p = np.where(p == 1, 1 - eps, p)
+        return np.log(p / (1 - p))
+
+
+def plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx, 
+                                      figsize=(24, 20)):
     """
     Plot logit(p_hat) vs. NMF factor score for each sample in a grid.
     """
-    def safe_logit(p, eps=1e-5):
-        # Avoid division by zero or log(0)
-        p = np.clip(p, eps, 1 - eps)
-        return np.log(p / (1 - p))
 
-    # Layout
-    n_cols = 4
-    n_rows = int(np.ceil(len(sample_ids) / n_cols))
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(24, 20))
-    axs = axs.flatten()
+    n = len(sample_ids)
+    # ---- grid logic  ----
+    if n == 6:
+        n_cols = 3
+    else:
+        n_cols = min(4, int(np.ceil(np.sqrt(n))))
+        if n == 5:
+            n_cols = 3
+        if n > 4 and n % 3 == 0:
+            n_cols = min(n_cols, 3)
+    n_rows = int(np.ceil(n / n_cols))
+
+    # scale fig size a bit with grid
+    base_w, base_h = figsize
+    fig_w = base_w * (n_cols / 4)
+    fig_h = base_h * (n_rows / 2)
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(fig_w, fig_h))
+    axs = np.atleast_1d(axs).ravel()
+
 
     # Global arrays
     nmf_scores_all = adata.obsm["X_nmf"][:, factor_idx]
@@ -221,14 +240,14 @@ def plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx):
         axs[i].scatter(nmf_scores, logit_p_hat, alpha=0.7, s=10)
         axs[i].set_title(sid, fontsize=14)
         axs[i].set_xlabel(f"NMF Factor {factor_idx + 1}")
-        axs[i].set_ylabel("logit(p̂)")
+        axs[i].set_ylabel("logit(p_hat)")
         axs[i].grid(True)
 
     # Turn off unused axes
     for j in range(i + 1, len(axs)):
         axs[j].axis("off")
 
-    plt.suptitle(f"logit(p̂) vs NMF Factor {factor_idx + 1} by sample", fontsize=14)
+    plt.suptitle(f"logit(p_hat) vs NMF Factor {factor_idx + 1} by sample", fontsize=14)
     plt.tight_layout(rect=[0, 0, 0.9, 0.95])
     plt.show()
 
@@ -300,6 +319,160 @@ def plot_grid(adata_by_sample, sample_ids, key, title_prefix, counter=None,
     plt.show()
 
 
+
+def plot_grid_upgrade(
+    adata_by_sample,
+    sample_ids,
+    key,
+    title_prefix,
+    counter=None,
+    from_obsm=False,
+    factor_idx=None,
+    figsize=(16, 8),
+    fontsize=10,
+    factor_wise=False,
+    dot_size=10,
+    coord_key="spatial",
+    invert_y=True,
+    equal_aspect=True,
+    discrete=False,
+    palette=None,   # dict {class: color} or list of colors if discrete=True
+):
+    """
+    Robust per-sample spatial plotting grid with optional legend.
+
+    - from_obsm=False: values from ad.obs[key]
+    - from_obsm=True and factor_idx is not None: values from ad.obsm[key][:, factor_idx]
+    - coord_key: name inside ad.obsm for spatial coords (default 'spatial')
+    - discrete=True: treat 'values' as labels (ints/strings) and color via palette
+    """
+
+    # -------- collect values across samples for a shared scale (continuous only) --------
+    if not discrete:
+        vals_all = []
+        for s in sample_ids:
+            ad = adata_by_sample[s]
+            if from_obsm:
+                if key not in ad.obsm:
+                    raise KeyError(f"{key} not found in ad.obsm for sample '{s}'.")
+                if factor_idx is None:
+                    raise ValueError("factor_idx must be provided when from_obsm=True.")
+                arr = ad.obsm[key]
+                vals = arr[:, factor_idx]
+            else:
+                if key not in ad.obs:
+                    raise KeyError(f"{key} not found in ad.obs for sample '{s}'.")
+                vals = pd.to_numeric(ad.obs[key], errors="coerce").to_numpy()
+            vals_all.append(vals)
+
+        all_vals = np.concatenate(vals_all) if len(vals_all) else np.array([])
+        finite_vals = all_vals[np.isfinite(all_vals)]
+        if finite_vals.size == 0:
+            raise ValueError("No finite values found across samples for the requested key.")
+        vmin, vmax = float(np.min(finite_vals)), float(np.max(finite_vals))
+        if vmin == vmax:  # avoid zero-range
+            eps = 1e-6 if vmax == 0 else 1e-6 * abs(vmax)
+            vmin, vmax = vmin - eps, vmax + eps
+
+    # -------- grid logic --------
+    n = len(sample_ids)
+    if n == 0:
+        raise ValueError("sample_ids is empty.")
+
+    if n == 6:
+        n_cols = 3
+    else:
+        n_cols = min(4, int(np.ceil(np.sqrt(n))))
+        if n == 5:
+            n_cols = 3
+        if n > 4 and n % 3 == 0:
+            n_cols = min(n_cols, 3)
+    n_rows = int(np.ceil(n / n_cols))
+
+    base_w, base_h = figsize
+    fig_w = base_w * (n_cols / 4)
+    fig_h = base_h * (n_rows / 2)
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(fig_w, fig_h))
+    axs = np.atleast_1d(axs).ravel()
+
+    last_im = None
+    used_axes = 0
+    discrete_labels_global = set()  # track unique labels across samples
+
+    # -------- plotting per sample --------
+    for i, sid in enumerate(sample_ids):
+        ax = axs[i]
+        ad = adata_by_sample[sid]
+
+        if coord_key not in ad.obsm:
+            raise KeyError(f"Coordinates ad.obsm['{coord_key}'] not found for sample '{sid}'.")
+        coords = ad.obsm[coord_key]
+        x, y = coords[:, 0], coords[:, 1]
+
+        if from_obsm:
+            arr = ad.obsm[key]
+            vals = arr[:, factor_idx]
+        else:
+            vals = pd.to_numeric(ad.obs[key], errors="coerce").to_numpy()
+
+        if discrete:
+            labs = vals
+            discrete_labels_global.update(pd.unique(pd.Series(labs).dropna()))
+
+            if palette is None:
+                uniq = sorted(discrete_labels_global, key=lambda z: str(z))
+                default_colors = [
+                    "#4C78A8", "#F58518", "#54A24B", "#E45756", "#72B7B2",
+                    "#EECA3B", "#B279A2", "#FF9DA6", "#9D755D", "#BAB0AC"
+                ]
+                palette = {lab: default_colors[i % len(default_colors)] for i, lab in enumerate(uniq)}
+
+            colors = [palette.get(l, "#BBBBBB") if pd.notnull(l) else "#DDDDDD" for l in labs]
+            ax.scatter(x, y, c=colors, s=dot_size, edgecolors="none")
+            last_im = None
+        else:
+            vals_plot = np.array(vals, dtype=float)
+            vals_plot[~np.isfinite(vals_plot)] = np.nan
+            im = ax.scatter(x, y, c=vals_plot, cmap="viridis", s=dot_size,
+                            vmin=vmin, vmax=vmax, edgecolors="none")
+            last_im = im
+
+        if equal_aspect:
+            ax.set_aspect('equal', 'box')
+        if invert_y:
+            ax.invert_yaxis()
+
+        ax.set_title(str(sid), fontsize=fontsize)
+        ax.axis("off")
+        used_axes += 1
+
+    for j in range(used_axes, len(axs)):
+        axs[j].axis("off")
+
+    # shared colorbar (continuous only)
+    if (not discrete) and (last_im is not None):
+        cbar_ax = fig.add_axes([0.92, 0.25, 0.015, 0.5])
+        cb = fig.colorbar(last_im, cax=cbar_ax)
+        cb.ax.tick_params(labelsize=fontsize)
+        cb.set_label(key.replace("_", " ").title(), fontsize=fontsize + 2)
+
+    # legend (discrete only)
+    if discrete and palette is not None:
+        handles = [plt.Line2D([0], [0], marker='o', linestyle='',
+                              color=palette[l], label=str(l),
+                              markersize=8) for l in sorted(discrete_labels_global, key=lambda z: str(z))]
+        fig.legend(handles=handles, title=key, loc="center right", fontsize=fontsize, title_fontsize=fontsize+1)
+
+    # title
+    if factor_wise:
+        suptitle = f"{title_prefix} across spatial coordinates for factor {counter}"
+    else:
+        suptitle = f"{title_prefix} across spatial coordinates"
+    plt.suptitle(suptitle, fontsize=fontsize + 3)
+
+    right_margin = 0.9 if (not discrete) else 0.85  # leave room for legend
+    plt.tight_layout(rect=[0, 0, right_margin, 0.95])
+    plt.show()
 
 def plot_grid_naive(adata_by_sample, sample_ids, key, title_prefix, counter=None, 
               from_obsm=False, factor_idx=None, figsize=(16, 8), fontsize=10, 
