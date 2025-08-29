@@ -13,18 +13,12 @@ import warnings
 warnings.simplefilter("ignore", category=ConvergenceWarning)
 from scipy.sparse import issparse
 from functools import reduce
-
 from SpatialPeeler import helpers as hlps
 from SpatialPeeler import case_prediction as cpred
 from SpatialPeeler import plotting as plot
 from SpatialPeeler import gene_identification as gid
 
 import pickle
-
-
-
-
-### kmeans clustering of p_hat_factor_case
 from sklearn.cluster import KMeans
 
 
