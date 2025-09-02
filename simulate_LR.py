@@ -86,16 +86,17 @@ case_mean = 5
 control_mean = 3
 sd = 1
 
-case_w = 1
-control_w = 9
+case_w = 3
+control_w = 7
 
 noise = np.random.normal(0, sd, num_obs*2)
 y = np.array([0]*(num_obs) + [1]*num_obs)
-
+SHUFFLE = False
 
 for _ in range(NUM_TRIALS):
 
     # Experiment 1
+    y = np.array([0]*(num_obs) + [1]*num_obs)
     control_obs = np.random.normal(loc=control_mean, scale=sd, size=num_obs)
     case_obs = np.random.normal(loc=case_mean, scale=sd, size=num_obs)
     X_exp1 = np.concatenate([control_obs, case_obs])
@@ -165,10 +166,13 @@ for _ in range(NUM_TRIALS):
     X_exp2 = np.concatenate([control_obs, case_obs])
     X_exp2 += noise  # add noise to both experiments
     try:
+        if SHUFFLE:
+            y_shuffle = np.random.permutation(y)
+            y = y_shuffle
         predicted_prob, coef, stderr, pvals = standalone_logistic(X_exp2, y)
         logit_phat = plot.safe_logit(predicted_prob)
         residual = y - logit_phat
-        
+
         exp2_coef.append(coef)
         exp2_pvalue.append(pvals)
 
@@ -218,7 +222,7 @@ for _ in range(NUM_TRIALS):
 print('Exp2: #obs from case dist:', int((2*num_obs*case_w)/10))
 print('Exp2: #obs from control dist:', int((2*num_obs*control_w)/10))
 
-'''
+
 ### visualize the violin plot of experiment 1 and 2 mean residuals for case and control - after clusterg
 plt.figure(figsize=(16, 10))
 violin_parts = plt.violinplot([exp1_mean_residual_control0, exp1_mean_residual_case0, exp1_mean_residual_case1,
@@ -288,7 +292,7 @@ for i, pc in enumerate(violin_parts['bodies']):
     pc.set_facecolor(colors[i])
     pc.set_edgecolor('black')
 plt.show()
-'''
+
 
 ### visualize the violin plot of experiment 1 and 3 correlation values
 plt.figure(figsize=(16, 10))
@@ -305,7 +309,6 @@ plt.figtext(0.5, 0.01, 'Case weight: ' + str(case_w) + ', Control weight: ' + st
 plt.show()
 
 
-
 ### visualize the violin plot of experiment 1 and 3 correlation values
 plt.figure(figsize=(16, 10))
 plt.violinplot([exp1_cor_x_phat_control, exp1_cor_x_phat_case0, exp1_cor_x_phat_case1,
@@ -313,7 +316,7 @@ plt.violinplot([exp1_cor_x_phat_control, exp1_cor_x_phat_case0, exp1_cor_x_phat_
 plt.xticks([1, 2, 3, 4, 5, 6], ['Exp1 Control', 'Exp1 Case0', 'Exp1 Case1', 
                                 'Exp2 Control', 'Exp2 Case0', 'Exp2 Case1'])
 plt.ylabel('Absolute Correlation Coefficient')
-plt.suptitle('Correlation values of X vs p-hat over' + str(NUM_TRIALS) + 'draws in two experiments')
+plt.suptitle('Correlation values of X vs p-hat over ' + str(NUM_TRIALS) + 'draws in two experiments')
 plt.title('case-mean: ' + str(case_mean) + ', control-mean: ' + str(control_mean))
 ### add another subtitle:
 plt.figtext(0.5, 0.01, 'Case weight: ' + str(case_w) + ', Control weight: ' + str(control_w), 
@@ -321,3 +324,66 @@ plt.figtext(0.5, 0.01, 'Case weight: ' + str(case_w) + ', Control weight: ' + st
 plt.show()
 
 
+### extract beta-1 from the coef list 
+exp1_beta1 = [coef[1] for coef in exp1_coef]
+exp2_beta1 = [coef[1] for coef in exp2_coef]
+### draw histogram
+plt.figure(figsize=(10, 6))
+plt.hist(exp1_beta1, bins=60, color='blue', alpha=0.5)
+plt.hist(exp2_beta1, bins=60, color='orange', alpha=0.5)
+plt.xlabel('Beta-1 Coefficient')
+plt.ylabel('Frequency')
+plt.axvline(np.mean(exp1_beta1), color='blue', linestyle='solid', linewidth=1.5)
+plt.suptitle('Distribution of Beta-1 Coefficients for Experiment 1 and 2')
+plt.axvline(np.mean(exp2_beta1), color='orange', linestyle='solid', linewidth=1.5)
+### add legend for colors
+plt.title('Case weight: ' + str(case_w) + ', Control weight: ' + str(control_w), 
+            wrap=True, horizontalalignment='center', fontsize=20)
+plt.legend(['Exp 1 (50:50)', 'Exp 2 (edge)'], loc='upper right')
+plt.show()
+
+
+exp1_pvalue_beta1 = [pval[1] for pval in exp1_pvalue]
+exp2_pvalue_beta1 = [pval[1] for pval in exp2_pvalue]
+### draw histogram
+plt.figure(figsize=(10, 6))
+plt.hist(exp1_pvalue_beta1, bins=60, color='blue', alpha=0.5)
+plt.hist(exp2_pvalue_beta1, bins=60, color='orange', alpha=0.5)
+plt.xlabel('Beta-1 Coefficient pvalues')
+plt.ylabel('Frequency')
+plt.axvline(np.mean(exp1_pvalue_beta1), color='blue', linestyle='solid', linewidth=1.5)
+plt.suptitle('Distribution of Beta-1 Coef Pvalue for Experiment 1 and 2')
+plt.axvline(np.mean(exp2_pvalue_beta1), color='orange', linestyle='solid', linewidth=1.5)
+plt.title('Case weight: ' + str(case_w) + ', Control weight: ' + str(control_w), 
+            wrap=True, horizontalalignment='center', fontsize=20)
+### add legend for colors
+plt.legend(['Exp 1 (50:50)', 'Exp 2 (edge)'], loc='upper right')
+plt.show()
+
+
+### draw histogram
+plt.figure(figsize=(10, 6))
+plt.hist(exp2_pvalue_beta1, bins=60, color='orange', alpha=0.5)
+plt.xlabel('Beta-1 Coefficient pvalues')
+plt.ylabel('Frequency')
+plt.suptitle('Distribution of Beta-1 Coef p-values for Experiment 2')
+plt.axvline(np.mean(exp2_pvalue_beta1), color='orange', linestyle='solid', linewidth=1.5)
+plt.title('Case weight: ' + str(case_w) + ', Control weight: ' + str(control_w), 
+            wrap=True, horizontalalignment='center', fontsize=20)
+### add legend for colors
+plt.legend(['Exp 2'], loc='upper right')
+plt.show()
+
+
+### draw histogram
+plt.figure(figsize=(10, 6))
+plt.hist(exp1_pvalue_beta1, bins=60, color='blue', alpha=0.5)
+plt.xlabel('Beta-1 Coefficient pvalues')
+plt.ylabel('Frequency')
+plt.suptitle('Distribution of Beta-1 Coef p-values for Experiment 1')
+plt.axvline(np.mean(exp1_pvalue_beta1), color='blue', linestyle='solid', linewidth=1.5)
+plt.title('Case weight: ' + str(case_w) + ', Control weight: ' + str(control_w), 
+            wrap=True, horizontalalignment='center', fontsize=20)
+### add legend for colors
+plt.legend(['Exp 1'], loc='upper right')
+plt.show()
