@@ -1,4 +1,3 @@
-
 import os
 import sys
 root_path = os.path.abspath('./..')
@@ -37,17 +36,22 @@ vis.visual_settings()
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t7.pkl'
 
 with open(results_path, 'rb') as f:
     results = pickle.load(f)
 
-#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
+adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 #adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
-#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad')
+#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
+
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
 adata = sc.read_h5ad(file_name)
+adata.obs['sample_id'] = adata.obs['orig.ident']
+
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
 
@@ -92,6 +96,11 @@ LOF_index = [3, 19, 23, 25]
 GOF_index = [6, 2, 0]
 LOF_index = [3, 5, 7]
 
+#### uncropped - t7 indices
+GOF_index = [0, 12, 16, 20, 15]
+LOF_index = [27, 4, 10]
+
+
 ################################################
 
 i = 0
@@ -125,6 +134,22 @@ adata_by_sample = {
     for sample_id in sample_ids
 }
 
+
+#gene_symbol = 'Snap25'#'Mbp' #'Ttr'#'Snap25'# 
+### convert gene sumbol to ensemble id - mouse
+for gene_symbol in ['Snap25', 'Mbp', 'Ttr']:
+    gene_ensembl = hlps.map_symbol_to_ensembl([gene_symbol], species='mouse')
+    print(gene_ensembl)
+    for sample_id_to_check in range(len(sample_ids)):
+        an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
+        print(f"Sample {sample_ids[sample_id_to_check]}:")
+        plot.plot_gene_spatial(an_adata_sample, gene_ensembl[gene_symbol], 
+                                title=f"{gene_symbol} - {sample_ids[sample_id_to_check]}", 
+                                cmap="viridis")
+
+
+
+#####################################
 plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
     title_prefix="HiDDEN predictions", counter=factor_idx+1, 
     figsize=(43, 20), fontsize=45) #figsize=(45, 33) (43, 15)
@@ -272,9 +297,9 @@ print(top_genes['Pearson'])
 import dataframe_image as dfi
 
 #factor_idx = GOF_index[2]
-PATTERN_COND = 'GOF'#'LOF'  # 'GOF' or 
+PATTERN_COND = 'LOF'#'LOF'  # 'GOF' or 
 
-for factor_idx in GOF_index:
+for factor_idx in LOF_index:#GOF_index
     factor_name = f'NMF{factor_idx + 1}'
     print(f"Top genes for p-hat {factor_name}:")
 
@@ -322,7 +347,8 @@ for factor_idx in GOF_index:
     styled_df
     # Export the styled DataFrame to a PNG file
     #outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t3_7_phat_{factor_idx+1}_genes_df.png"
-    outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t18_phat_{factor_idx+1}_genes_df.png"
+    #outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t18_phat_{factor_idx+1}_genes_df.png"
+    outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t7_phat_{factor_idx+1}_genes_df.png"
     dfi.export(
         styled_df,
         outpath,

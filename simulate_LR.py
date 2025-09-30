@@ -107,8 +107,8 @@ for _ in range(NUM_TRIALS):
         exp1_coef.append(coef)
         exp1_pvalue.append(pvals)
 
-        logit_phat = plot.safe_logit(predicted_prob)
-        residual = y - logit_phat
+        #logit_phat = plot.safe_logit(predicted_prob)
+        residual = y - predicted_prob
 
         exp1_mean_phat_case.append(np.mean(predicted_prob[y==1]))
         exp1_mean_phat_control.append(np.mean(predicted_prob[y==0]))
@@ -170,8 +170,8 @@ for _ in range(NUM_TRIALS):
             y_shuffle = np.random.permutation(y)
             y = y_shuffle
         predicted_prob, coef, stderr, pvals = standalone_logistic(X_exp2, y)
-        logit_phat = plot.safe_logit(predicted_prob)
-        residual = y - logit_phat
+        #logit_phat = plot.safe_logit(predicted_prob)
+        residual = y - predicted_prob
 
         exp2_coef.append(coef)
         exp2_pvalue.append(pvals)
@@ -241,6 +241,7 @@ for i, pc in enumerate(violin_parts['bodies']):
     pc.set_edgecolor('black')
 plt.show()
 
+'''
 #### visualize the violin plot of experiment 1 and 2 mean p-hat scores for case and control - after clustering
 plt.figure(figsize=(16,10))
 violin_parts = plt.violinplot([exp1_mean_phat_control0, exp1_mean_phat_case0, exp1_mean_phat_case1,
@@ -257,7 +258,7 @@ for i, pc in enumerate(violin_parts['bodies']):
     pc.set_facecolor(colors[i])
     pc.set_edgecolor('black')
 plt.show()
-
+'''
 
 ### visualize the violin plot of experiment 1 and 2 mean residuals for case and control - before clusterg
 plt.figure(figsize=(10, 10))
@@ -276,7 +277,21 @@ for i, pc in enumerate(violin_parts['bodies']):
     pc.set_edgecolor('black')
 plt.show()
 
+### visualize the violin plot of experiment 1 and 3 correlation values
+plt.figure(figsize=(16, 10))
+plt.violinplot([exp1_cor_res_phat_control, exp1_cor_res_phat_case0, exp1_cor_res_phat_case1,
+                exp2_cor_res_phat_control, exp2_cor_res_phat_case0, exp2_cor_res_phat_case1], showmeans=True)
+plt.xticks([1, 2, 3, 4, 5, 6], ['Exp1 Control', 'Exp1 Case0', 'Exp1 Case1', 
+                                'Exp2 Control', 'Exp2 Case0', 'Exp2 Case1'])
+plt.ylabel('Absolute Correlation Coefficient')
+plt.suptitle('Correlation values of Residual vs p-hat over ' + str(NUM_TRIALS) + ' draws in two experiments')
+plt.title('case-mean: ' + str(case_mean) + ', control-mean: ' + str(control_mean))
+### add another subtitle:
+plt.figtext(0.5, 0.01, 'Case weight: ' + str(case_w) + ', Control weight: ' + str(control_w), 
+            wrap=True, horizontalalignment='center', fontsize=10)
+plt.show()
 
+'''
 ### visualize the violin plot of experiment 1 and 2 mean p-hat values for case and control - before clustering
 plt.figure(figsize=(10, 10))
 violin_parts = plt.violinplot([exp1_mean_phat_control, exp1_mean_phat_case, 
@@ -294,19 +309,7 @@ for i, pc in enumerate(violin_parts['bodies']):
 plt.show()
 
 
-### visualize the violin plot of experiment 1 and 3 correlation values
-plt.figure(figsize=(16, 10))
-plt.violinplot([exp1_cor_res_phat_control, exp1_cor_res_phat_case0, exp1_cor_res_phat_case1,
-                exp2_cor_res_phat_control, exp2_cor_res_phat_case0, exp2_cor_res_phat_case1], showmeans=True)
-plt.xticks([1, 2, 3, 4, 5, 6], ['Exp1 Control', 'Exp1 Case0', 'Exp1 Case1', 
-                                'Exp2 Control', 'Exp2 Case0', 'Exp2 Case1'])
-plt.ylabel('Absolute Correlation Coefficient')
-plt.suptitle('Correlation values of Residual vs p-hat over ' + str(NUM_TRIALS) + ' draws in two experiments')
-plt.title('case-mean: ' + str(case_mean) + ', control-mean: ' + str(control_mean))
-### add another subtitle:
-plt.figtext(0.5, 0.01, 'Case weight: ' + str(case_w) + ', Control weight: ' + str(control_w), 
-            wrap=True, horizontalalignment='center', fontsize=10)
-plt.show()
+
 
 
 ### visualize the violin plot of experiment 1 and 3 correlation values
@@ -387,3 +390,5 @@ plt.title('Case weight: ' + str(case_w) + ', Control weight: ' + str(control_w),
 ### add legend for colors
 plt.legend(['Exp 1'], loc='upper right')
 plt.show()
+
+'''

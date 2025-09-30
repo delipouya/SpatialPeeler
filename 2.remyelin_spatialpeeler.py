@@ -27,12 +27,14 @@ RAND_SEED = 28
 CASE_COND = 1
 np.random.seed(RAND_SEED)
 
-#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
+
 adata_cropped = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 
 adata = sc.read_h5ad(file_name)
@@ -75,7 +77,7 @@ print(metadata_df)
 #for i in range(min(8, len(sample_ids))):
 #    plot_spatial_p_hat(adata_by_sample[sample_ids[i]], sample_ids[i])
 
-plot.plot_grid(adata_by_sample, sample_ids, key="cropped", 
+plot.plot_grid_upgrade(adata_by_sample, sample_ids, key="cropped", 
                title_prefix="Cropped regions", 
                from_obsm=False, figsize=(43, 30), fontsize=45, 
                dot_size=50) #figsize=(42, 30), fontsize=45
@@ -187,7 +189,7 @@ plt.show()
 cropped_status = ['black' if x else  'yellow' for x in adata.obs['cropped'].values]
 for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
     #plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(16, 10), color_vector=cropped_status) #(18, 6)
-    #plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i)
+    plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 10))
     plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 10), 
                                      color_vector=cropped_status) #(18, 6)
 
@@ -198,11 +200,12 @@ for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18_K10.pkl'
-#with open(results_path, 'wb') as f:
-#    pickle.dump(results, f)
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t7.pkl'
+with open(results_path, 'wb') as f:
+    pickle.dump(results, f)
 
 
 with open(results_path, 'rb') as f:
@@ -237,6 +240,10 @@ LOF_index = [3, 19, 23, 25]
 #### uncropped - t18 K10 indices
 GOF_index = [6, 2, 0]
 LOF_index = [3, 5, 7]
+
+#### uncropped - t7 indices
+GOF_index = [0, 12, 16, 20, 15]
+LOF_index = [27, 4, 10]
 
 
 print(GOF_index)
@@ -296,7 +303,7 @@ plt.ylabel("p_hat Factors")
 plt.tight_layout()
 plt.show()
 
-for result in results_LOF: #results_GOF
+for result in results_LOF: #results_LOF
     print(f"Factor {result['factor_index'] + 1}:")
     factor_number = result['factor_index'] + 1
     print(f"  p_hat mean: {result['p_hat'].mean():.4f}")
@@ -465,6 +472,9 @@ LOF_index = [0, 27, 12, 5, 19]
 GOF_index = [18, 12, 9, 20, 14]
 LOF_index = [3, 19, 23, 25]
 
+#### uncropped - t7 indices
+GOF_index = [0, 12, 16, 20, 15]
+LOF_index = [27, 4, 10]
 
 NMF_H = pd.DataFrame(adata.uns["nmf_components"]).T
 NMF_H.columns = [f'NMF{i+1}' for i in range(NMF_H.shape[1])]
@@ -491,7 +501,9 @@ for index in GOF_index + LOF_index:
     styled_df
     # Export the styled DataFrame to a PNG file
     #outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t3_7_NMF{index+1}_genes_df.png"
-    outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t18_NMF{index+1}_genes_df.png"
+    #outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t18_NMF{index+1}_genes_df.png"
+    outpath = f"/home/delaram/SpatialPeeler/Plots/remyelin_t7_NMF{index+1}_genes_df.png"
+
     dfi.export(
         styled_df,
         outpath,

@@ -20,6 +20,7 @@ import functools
 
 from SpatialPeeler import importing as imp
 from SpatialPeeler import helpers as hlps
+from SpatialPeeler import plotting as plot
 #from scipy.stats import mannwhitneyu
 from sklearn.exceptions import ConvergenceWarning
 import warnings
@@ -28,13 +29,14 @@ warnings.simplefilter("ignore", category=ConvergenceWarning)
 from scipy import io
 from scipy.sparse import csr_matrix
 
+
 RAND_SEED = 28
 CASE_COND = 1
 np.random.seed(RAND_SEED)
 utils.set_random_seed(utils.RANDOM_SEED)
 utils.print_module_versions([sc, anndata, scvi, hiddensc])
 vis.visual_settings()
-root_dir = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq'
+root_dir = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/'
 
 #######################################
 #### importing the uncropped data  ####
@@ -53,17 +55,25 @@ metadata_df = metadata_df.reset_index(drop=True)
 duplicate_rows_mask = metadata_df.duplicated()
 metadata_df = metadata_df[~duplicate_rows_mask]
 
-LPC_t18_mask = (metadata_df['Timepoint'] == 18) & (metadata_df['Condition'] == 'LPC')
-sample_id_LPC_t18 = metadata_df[LPC_t18_mask]['sample_id'].values.tolist()
-Saline_t18_12_7_mask = (metadata_df['Timepoint'].isin([18,12,7])) & (metadata_df['Condition'] == 'Saline')
-sample_id_Saline_t18_12_7 = metadata_df[Saline_t18_12_7_mask]['sample_id'].values.tolist()
-sample_id_merged = sample_id_LPC_t18 + sample_id_Saline_t18_12_7
+#LPC_t18_mask = (metadata_df['Timepoint'] == 18) & (metadata_df['Condition'] == 'LPC')
+#sample_id_LPC_t18 = metadata_df[LPC_t18_mask]['sample_id'].values.tolist()
+#Saline_t18_12_7_mask = (metadata_df['Timepoint'].isin([18,12,7])) & (metadata_df['Condition'] == 'Saline')
+#sample_id_Saline_t18_12_7 = metadata_df[Saline_t18_12_7_mask]['sample_id'].values.tolist()
+#sample_id_merged = sample_id_LPC_t18 + sample_id_Saline_t18_12_7
 
 #LPC_t3_mask = (metadata_df['Timepoint'] == 3) & (metadata_df['Condition'] == 'LPC')
 #sample_id_LPC_t3 = metadata_df[LPC_t3_mask]['sample_id'].values.tolist()
 #Saline_t3_7_mask = (metadata_df['Timepoint'].isin([3,7])) & (metadata_df['Condition'] == 'Saline')
 #sample_id_Saline_t3_7 = metadata_df[Saline_t3_7_mask]['sample_id'].values.tolist()
 #sample_id_merged = sample_id_LPC_t3 + sample_id_Saline_t3_7
+
+
+LPC_t7_mask = (metadata_df['Timepoint'] == 7) & (metadata_df['Condition'] == 'LPC')
+sample_id_LPC_t7 = metadata_df[LPC_t7_mask]['sample_id'].values.tolist()
+Saline_t3_7_mask = (metadata_df['Timepoint'].isin([3,7])) & (metadata_df['Condition'] == 'Saline')
+sample_id_Saline_t3_7 = metadata_df[Saline_t3_7_mask]['sample_id'].values.tolist()
+sample_id_merged = sample_id_LPC_t7 + sample_id_Saline_t3_7
+
 
 print(metadata_df[metadata_df['sample_id'].isin(sample_id_merged)])
 print(metadata_df.head())
@@ -116,7 +126,7 @@ sc.pp.scale(adata_merged, max_value=10, zero_center=True, layer='lognorm')
 # You can also use the `init='nndsvda'` option for better initialization
 # and set `max_iter` to a higher value for convergence.
 
-n_factors = 10#30  
+n_factors = 30  
 nmf_model = NMF(n_components=n_factors, init='nndsvda', 
                 random_state=RAND_SEED, max_iter=1000)
 # X must be dense; convert if sparse
@@ -135,6 +145,30 @@ adata_merged.uns["nmf_components"] = H
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_SampleWiseNorm.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
 
 adata_merged.write_h5ad(file_name)
+
+
+
+
+#adata_merged.obs['sample_id'] = adata_merged.obs['orig.ident']
+sample_ids = adata_merged.obs['sample_id'].unique().tolist()
+adata_by_sample = {
+    sample_id: adata_merged[adata_merged.obs['sample_id'] == sample_id].copy()
+    for sample_id in sample_ids
+}
+
+
+#gene_symbol = 'Snap25'#'Mbp' #'Ttr'#'Snap25'# 
+### convert gene sumbol to ensemble id - mouse
+for gene_symbol in ['Snap25', 'Mbp', 'Ttr']:
+    gene_ensembl = hlps.map_symbol_to_ensembl([gene_symbol], species='mouse')
+    print(gene_ensembl)
+    for sample_id_to_check in range(len(sample_ids)):
+        an_adata_sample = adata_by_sample[sample_ids[sample_id_to_check]]
+        print(f"Sample {sample_ids[sample_id_to_check]}:")
+        plot.plot_gene_spatial(an_adata_sample, gene_ensembl[gene_symbol], 
+                                title=f"{gene_symbol} - {sample_ids[sample_id_to_check]}", 
+                                cmap="viridis")
