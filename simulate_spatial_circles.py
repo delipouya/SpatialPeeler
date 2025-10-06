@@ -47,7 +47,7 @@ assert ct_out in adata.obs["louvain"].unique(), f"Missing {ct_out}"
 # ---------------------------
 # Make a spatial grid + circle mask
 rng = np.random.default_rng(42)
-H, W = 200, 300        # grid height × width
+H, W = 40, 60#200, 300        # grid height × width
 y, x = np.ogrid[:H, :W]
 
 cy, cx = H / 2, W / 2
@@ -91,7 +91,8 @@ obs = pd.DataFrame({
 })
 
 ground_truth = sc.AnnData(X_spots, obs=obs, var=adata.var.copy())
-ground_truth.uns["description"] = "ground_truth: inside=CD4 T cells, outside=B cells (sampled with replacement from PBMC3k)."
+ground_truth.uns["description"] = "ground_truth: inside=CD4 T cells, " \
+"outside=B cells (sampled with replacement from PBMC3k)."
 
 #ground_truth.uns["spatial_layout"] = {
 #    "height": H, "width": W,
@@ -121,23 +122,23 @@ for a_marker in immune_markers:
 for g in markers_to_vis:  # T cells inside, B cells outside
     show_marker(ground_truth, g, H, W, "(ground truth)")
 # ---------------------------
-ground_truth.write_h5ad("/home/delaram/SpatialPeeler/Data/ground_truth_cd4_inside_b_outside.h5ad")
+ground_truth.write_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/ground_truth_cd4_inside_b_outside_H" + str(H) + "_W" + str(W) + ".h5ad")
 
 
 ################ creating a similr field with half a circle on the top/bottom insead of full circle
 # ---------------------------
-# Make a spatial grid + circle mask
-rng = np.random.default_rng(42)
-H, W = 200, 300        # grid height × width
-y, x = np.ogrid[:H, :W]
-
-cy, cx = H / 2, W / 2
-r = min(H, W) * 0.25   # circle radius
 ## formula for a circle centered at (c_x,c_y): (x - c_x)^2 + (y - c_y)^2 = r^2
 circle_mask = (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2 # full circle: (200, 300) -> 7845 true elements
-half_circle_mask = circle_mask & (y > cy)  # half circle on top of cy -> 3872 true elements
-half_circle_mask = circle_mask & (y < cy)  # half circle on bottom of cy -> 3872 true elements
+half_circle_mask_top = circle_mask & (y > cy)  # half circle on top of cy -> 3872 true elements
+half_circle_mask_bottom = circle_mask & (y < cy)  # half circle on bottom of cy -> 3872 true elements
 
+half_circle_mask = None
+HALF_CIRC = "BOTTOM"  # "TOP" or "BOTTOM"
+
+if HALF_CIRC == "BOTTOM":
+    half_circle_mask = half_circle_mask_bottom
+else:
+    half_circle_mask = half_circle_mask_top
 # ---------------------------
 # Sample cell indices from adata based on the mask
 is_cd4 = (adata.obs["louvain"].values == ct_in)
@@ -183,5 +184,10 @@ print(seed.obs["assigned_cell_type"].value_counts())
 for g in markers_to_vis:  # T cells inside, B cells outside
     show_marker(seed, g, H, W, "(seed)")
 # ---------------------------
-seed.write_h5ad("/home/delaram/SpatialPeeler/Data/seed_top_cd4_inside_b_outside.h5ad")
-seed.write_h5ad("/home/delaram/SpatialPeeler/Data/seed_bottom_cd4_inside_b_outside.h5ad")
+
+
+if HALF_CIRC == "TOP":
+    half_circle_str = "top"
+else:
+    half_circle_str = "bottom"    
+seed.write_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/seed_" + half_circle_str + "_cd4_inside_b_outside_H" + str(H) + "_W" + str(W) + ".h5ad")

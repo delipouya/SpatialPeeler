@@ -16,7 +16,7 @@ import time
 # ----------------------------
 # 1) Build circle GT and half-circle seeds
 # ----------------------------
-H, W = 10, 20                 # small & fast; feel free to increase
+H, W = 40, 60                 # small & fast; feel free to increase
 y, x  = np.ogrid[:H, :W]
 cy, cx = H/2, W/2
 r = min(H, W) * 0.30          # circle radius
@@ -25,13 +25,15 @@ circle  = (x - cx)**2 + (y - cy)**2 <= r**2
 top     = circle & (y < cy)
 bottom  = circle & (y >= cy)
 
-gt    = np.zeros((H, W), np.uint8); gt[circle]  = 1
-seed1 = np.zeros((H, W), np.uint8); seed1[bottom] = 1    # bottom half
-seed2 = np.zeros((H, W), np.uint8); seed2[top]    = 1    # top half
+gt    = np.zeros((H, W), np.uint8)
+gt[circle]  = 1
+seed1 = np.zeros((H, W), np.uint8)
+seed1[bottom] = 1    # bottom half
+seed2 = np.zeros((H, W), np.uint8)
+seed2[top]    = 1    # top half
 
 gt_vec, seed1_vec, seed2_vec = gt.ravel(), seed1.ravel(), seed2.ravel()
 n_genes = H*W
-
 
 # ----------------------------
 # Initial population: ONLY noisy variants of seeds (no union)
@@ -45,7 +47,7 @@ while len(init) < sol_per_pop:
 
     # Flip a handful of bits (~5% of genome) to avoid duplicates
     m = max(1, int(0.10 * n_genes))              # flip ~10% bits for diversity
-    flip = rng.choice(n_genes, size=m, replace=False)
+    flip = rng.choice(n_genes, size=m, replace=False) ### flipping indices
     indiv[flip] = 1 - indiv[flip]
     init.append(indiv)
 initial_population = np.stack(init, axis=0).astype(np.uint8, copy=False)
@@ -67,9 +69,9 @@ for indiv in initial_population:
 # Fitness functions
 # ---------------------------
 # ----------------------------
-# Fitness: Fβ (β²)  – λ_tv * TV – λ_iso * ISO
+# Fitness: Fβ (β²)  – lambda_tv * TV – lambda_iso * ISO
 # ----------------------------
-beta = 8.0                 # ↑ recall (FN >> FP); try 6–12
+beta = 8.0  # beta>1 weights recall (penalizes false negatives) more than precision (FN >> FP); try 6–12
 b2   = beta*beta
 pos  = (gt_vec == 1)
 neg  = ~pos
@@ -77,25 +79,59 @@ neg  = ~pos
 lam_tv  = 0.010            # TV penalty weight ~0.006–0.02
 lam_iso = 0.020            # isolated-1 penalty weight ~0.01–0.04
 
-def total_variation(flat):
-    """Normalized 4-neighborhood boundary length (discourages ragged edges)."""
-    img = flat.reshape(H, W)
-    edges = np.sum(img[:,1:] != img[:,:-1]) + np.sum(img[1:,:] != img[:-1,:])
-    return edges / (H*(W-1) + (H-1)*W)
 
-def isolated_ones_fraction(flat):
-    """Fraction of 1s with <2 neighbors in 8-neighborhood (suppresses speckles)."""
+def total_variation(flat):
+    """Normalized 4-neighborhood boundary length (discourages ragged edges or noisy boundaries)."""
+    img = flat.reshape(H, W)
+
+    # Count horizontal disagreements (between column c and c+1)
+    h_edges = np.sum(img[:,1:] != img[:,:-1])
+
+    # Count vertical disagreements (between row r and r+1)
+    v_edges = np.sum(img[1:,:] != img[:-1,:])
+
+    edges = h_edges + v_edges
+    total_4_neighbor_edges = H*(W-1) + (H-1)*W
+    return edges / total_4_neighbor_edges
+
+
+def isolated_ones_fraction(flat, neigh_thresh=2):
+    """Fraction of 1s with <2 neighbors in 8-neighborhood (suppresses speckles).
+    For a pixel at (i,j), we want the sum of its 8 neighbors:
+    (i-1,j-1)  (i-1,j)  (i-1,j+1)
+    (i,  j-1)      *     (i,  j+1)
+    (i+1,j-1)  (i+1,j)  (i+1,j+1)
+
+    Naive double loop solution (slower):
+    for i in range(1, H-1):
+        for j in range(1, W-1):
+            neigh[i,j] = (
+                z[i-1,j-1] + z[i-1,j] + z[i-1,j+1] +
+                z[i,  j-1]            + z[i,  j+1] +
+                z[i+1,j-1] + z[i+1,j] + z[i+1,j+1]
+            )
+    vectorized implementation of the loop is provided in this function:
+    """
+
     img = flat.reshape(H, W)
     z = np.pad(img, 1, mode="constant")
+    ## sum of neighbors for each pixel 
     neigh = (
         z[0:-2,0:-2] + z[0:-2,1:-1] + z[0:-2,2:] +
         z[1:-1,0:-2]                + z[1:-1,2:] +
         z[2:  ,0:-2] + z[2:  ,1:-1] + z[2:  ,2:]
     )
+    
+    ### boolean array indicating which pixels are 1s
     ones = (img == 1)
+
     if ones.sum() == 0:
         return 0.0
-    return float(np.mean(neigh[ones] < 2))
+    
+    ## binary array indicating which 1s are isolated (have <neigh_thresh neighbors)
+    isolated_ones = neigh[ones] < neigh_thresh
+
+    return float(np.mean(isolated_ones)) ## fraction of isolated 1s
 
 
 def fitness_v0(ga, sol, _):
@@ -107,6 +143,7 @@ def fitness_v0(ga, sol, _):
     iso   = isolated_ones_fraction(sol)
     return float(fbeta - lam_tv*tv - lam_iso*iso)
 
+
 def fitness(ga, sol, _):
     TP = np.sum((sol == 1) & pos, dtype=np.int32)
     TN = np.sum((sol == 0) & neg, dtype=np.int32)
@@ -117,7 +154,8 @@ def fitness(ga, sol, _):
     #iso   = isolated_ones_fraction(sol)
     return float(fbeta)
 
-
+################################################################################
+########## Naive fitness functions for comparison ##############################
 ## fitness functions -> maximize 1/(1 + distance)
 def fitness_func_count(ga_instance, solution, solution_idx):
     distance = np.sum(solution != gt_vec) ## total different bits
@@ -139,6 +177,7 @@ def fitness_func_linear(ga_instance, solution, solution_idx):
     distance = np.sum(solution != gt_vec, dtype=np.int32)
     # Larger is better; perfect match gets n_genes
     return n_genes - distance
+################################################################################
 
 solution = seed1_vec.copy()
 print("Fitness fitness_func_count of seed1:", fitness_func_count(None, solution, 0))
@@ -165,7 +204,7 @@ print("Fitness fitness_func_linear of ground truth:", fitness_func_linear(None, 
 # 4) GA configuration (strong pressure + annealed mutation)
 # ----------------------------
 ga = pygad.GA(
-    fitness_func=fitness_func_frac,
+    fitness_func=fitness_v0,
     num_generations=2000,
     num_parents_mating=round(sol_per_pop/2),
     sol_per_pop=sol_per_pop,
@@ -252,7 +291,7 @@ plt.show()
 
 plt.figure(figsize=(6,3))
 plt.plot(ga.best_solutions_fitness, marker="o", ms=3)
-plt.xlabel("Generation"); plt.ylabel("Fitness (Fβ - λ·TV - λ·ISO)")
+plt.xlabel("Generation"); plt.ylabel("Fitness (F.beta - lambda·TV - lambda·ISO)")
 plt.grid(alpha=0.3); plt.show()
 
 
