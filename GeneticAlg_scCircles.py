@@ -17,16 +17,6 @@ import scanpy as sc
 
 rng = np.random.default_rng(42)
 
-def _to_dense_colslice(X, cols):
-    if sp.issparse(X):
-        return X[:, cols].toarray().astype(np.float32, copy=False)
-    return np.asarray(X[:, cols], dtype=np.float32)
-
-def _zscore_cols(X):
-    mu = X.mean(axis=0, dtype=np.float64)
-    sd = X.std(axis=0, dtype=np.float64) + 1e-9
-    return (X - mu) / sd
-
 # sanity images
 def show_marker(adata_like, gene, title_suffix="", H=200, W=300):
 
@@ -109,7 +99,9 @@ adata_bottom = seed_b
 # Initial MASK population (two seeds + noisy variants)
 # ----------------------------
 rng = np.random.default_rng(42)
-sol_per_pop = 10 #60 120
+sol_per_pop = 20 #60 120
+
+
 init = [seed1_vec_mask.copy(), seed2_vec_mask.copy()]
 while len(init) < sol_per_pop:
     base = seed1_vec_mask if (len(init) % 2 == 0) else seed2_vec_mask
@@ -128,22 +120,25 @@ counter=1
 for indiv in initial_population:
     ### visualize the chromosome
     plt.figure(figsize=(6, 4))
-    plt.imshow(indiv.reshape(H, W), origin='lower', interpolation='nearest', cmap="gray_r", vmin=0, vmax=1)
+    plt.imshow(indiv.reshape(H, W), origin='lower', interpolation='nearest', 
+        cmap="gray_r", vmin=0, vmax=1)
     plt.title(f"Initial Population Chromosome {counter}")
     counter += 1
     plt.axis("off")
     plt.show()
 
 
+############################################################################################
 # ----------------------------
 # fitness function
 # ----------------------------
 
-# TODO: include polarity into obj function
+# TODO: include polarity into obj function?
 # +1 for T markers (want inside>outside), -1 for B markers (want inside<outside)
 
 def de_score_for_mask(mask_bool: np.ndarray, anndata, min_effect=0.1, 
-                         lognorm=True, scale=False, DE_criterion='t_test') -> int:
+                         lognorm=True, scale=False, 
+                         DE_criterion='t_test', verbose=False) -> int:
     """
     DE score for a binary mask on the ground truth AnnData.
     mask_bool: 1D boolean array of length n_obs 
@@ -180,12 +175,13 @@ def de_score_for_mask(mask_bool: np.ndarray, anndata, min_effect=0.1,
 
     # Denseify if sparse
     if sp.issparse(gt_in):  
-        gt_in  = gt_in.toarray()
-    if sp.issparse(gt_out): 
+        gt_in = gt_in.toarray()
+    if sp.issparse(gt_out):
         gt_out = gt_out.toarray()
 
     # Quick sanity
-    print(gt_in.shape, gt_out.shape)  # expect (inside_sum, n_genes) and (outside_sum, n_genes)
+    if verbose:
+        print(gt_in.shape, gt_out.shape)  # expect (inside_sum, n_genes) and (outside_sum, n_genes)
 
     num_DE = None
     if DE_criterion == 'mean_diff':
@@ -196,7 +192,8 @@ def de_score_for_mask(mask_bool: np.ndarray, anndata, min_effect=0.1,
         num_DE = int(np.sum(np.abs(diff) > min_effect))
         
         top_DE_genes = np.argsort(-np.abs(diff))[:10]
-        print("Top DE genes (by mean diff):", anndata.var_names[top_DE_genes].tolist())
+        if verbose:
+            print("Top DE genes (by mean diff):", anndata.var_names[top_DE_genes].tolist())
 
     elif DE_criterion == 't_test':
         # t-test criterion
@@ -204,43 +201,47 @@ def de_score_for_mask(mask_bool: np.ndarray, anndata, min_effect=0.1,
         _, pvals = ttest_ind(gt_in, gt_out, axis=0, equal_var=False)
         num_DE = int(np.sum(pvals < 0.05))
 
-        if num_DE > 0:
-            print(f"Found {num_DE} DE genes (p<0.05)")
-        else:
-            print("No DE genes found (p<0.05)")
+        if verbose:
+            if num_DE > 0:
+                print(f"Found {num_DE} DE genes (p<0.05)")
+            else:
+                print("No DE genes found (p<0.05)")
 
         top_DE_genes = np.argsort(pvals)[:10]
-        print("Top DE genes (by p-value):", anndata.var_names[top_DE_genes].tolist())
+        if verbose:
+            print("Top DE genes (by p-value):", anndata.var_names[top_DE_genes].tolist())
 
 
     return num_DE
 
-### test the function
+##############################################
+### test the DE function
+##############################################
 print("DE count for seed1:", de_score_for_mask(seed1_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), 
+                                                  ground_truth.copy(), verbose=True,
                                                   min_effect=0.2, lognorm=True, scale=False,
                                                   DE_criterion='mean_diff'))
 print("DE count for seed2:", de_score_for_mask(seed2_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), 
+                                                  ground_truth.copy(), verbose=True,
                                                   min_effect=0.2, lognorm=True, scale=False,
                                                   DE_criterion='mean_diff'))
 print("DE count for GT:   ", de_score_for_mask(gt_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), 
+                                                  ground_truth.copy(), verbose=True,
                                                   min_effect=0.2, lognorm=True, scale=False,
                                                   DE_criterion='mean_diff'))
 
 
 ### test the function
 print("DE count for seed1:", de_score_for_mask(seed1_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), 
+                                                  ground_truth.copy(), verbose=True,
                                                   min_effect=0.2, lognorm=True, scale=False, 
                                                   DE_criterion='t_test'))
 print("DE count for seed2:", de_score_for_mask(seed2_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), 
+                                                  ground_truth.copy(), verbose=True,
                                                   min_effect=0.2, lognorm=True, scale=False,
                                                   DE_criterion='t_test'))
 print("DE count for GT:   ", de_score_for_mask(gt_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), 
+                                                  ground_truth.copy(), verbose=True,
                                                   min_effect=0.2, lognorm=True, scale=False,
                                                   DE_criterion='t_test'))
 
@@ -248,14 +249,14 @@ print("DE count for GT:   ", de_score_for_mask(gt_vec_mask.astype(bool),
 print("Initial population DE scores:")
 init_pop_scores = []
 for i, indiv in enumerate(initial_population):
-    score = de_score_for_mask(indiv.astype(bool), ground_truth.copy(), 
+    score = de_score_for_mask(indiv.astype(bool), ground_truth.copy(), verbose=True,
                               lognorm=True, scale=False, DE_criterion='t_test')
     init_pop_scores.append(score)
     print(f"Indiv {i+1:2d}: DE count = {score}")
 
 ### score for a random mask
 random_mask = rng.integers(0, 2, size=n_genes, dtype=np.uint8)
-random_score = de_score_for_mask(random_mask.astype(bool), ground_truth.copy(),
+random_score = de_score_for_mask(random_mask.astype(bool), ground_truth.copy(), verbose=True,
                                     lognorm=True, scale=False, DE_criterion='t_test')
 
 ### histogram of initial population scores
@@ -266,18 +267,16 @@ plt.xlabel("DE Count")
 plt.ylabel("Frequency")
 plt.grid(axis='y', alpha=0.75)
 plt.show()
-
+##############################################
 
 
 def fitness_de(ga, sol, _):
     # GA fitness: number of DE genes on ground truth
     # sol is 0/1 vector of length H*W
     mask = sol.astype(bool, copy=False)
-    num_DEs = de_score_for_mask(mask, ground_truth.copy(), 
+    num_DEs = de_score_for_mask(mask, ground_truth.copy(), verbose=False,
                                 lognorm=True, scale=False, DE_criterion='t_test')
     return float(num_DEs)
-
-
 
 def total_variation(flat):
     img = flat.reshape(H, W)
@@ -299,7 +298,7 @@ def fitness_de_v2(ga, sol, _):
 
 
 # ----------------------------
-# 8) GA config (strong pressure + annealed mutation)
+# GA config (strong pressure + annealed mutation)
 # ----------------------------
 ga = pygad.GA(
     fitness_func=fitness_de,              # change to fitness_de_v2 to include TV penalty
@@ -333,32 +332,48 @@ def on_generation(g):
 
     if g.generations_completed in (1,5,10) or g.generations_completed % 100 == 0:
         best, fit, _ = g.best_solution()
-        tv = total_variation(best)
-        print(f"gen {g.generations_completed:4d} | DE_fit={fit:.2f} | TV={tv:.4f} "
+        #tv = total_variation(best)
+        #print(f"gen {g.generations_completed:4d} | DE_fit={fit:.2f} | TV={tv:.4f} "
+        #      f"| mp={g.mutation_probability:.3f} mk={g.mutation_num_genes}")
+        print(f"gen {g.generations_completed:4d} | DE_fit={fit:.2f}"
               f"| mp={g.mutation_probability:.3f} mk={g.mutation_num_genes}")
 ga.on_generation = on_generation
 
 # ----------------------------
-# 9) Run & visualize
+# Run & visualize
 # ----------------------------
 t0 = time.time(); 
 ga.run(); 
 print(f"Elapsed: {time.time()-t0:.2f}s")
+### save the GA instance
+import pickle
+with open("GeneticAlg_scCircles_ga_instance_numGen_2000.pkl", "wb") as f:
+    pickle.dump(ga, f)  
+
 best_vec, best_fit, _ = ga.best_solution()
 best_img = best_vec.reshape(H, W)
 
+### save the best solution
+np.save("GeneticAlg_scCircles_best_solution_numGen_2000.npy", best_vec)
 def show(ax, img, title):
     ax.imshow(img, origin="lower", cmap="gray_r", vmin=0, vmax=1)
-    ax.set_title(title); ax.axis("off")
+    ax.set_title(title)
+    ax.axis("off")
 
 fig, axs = plt.subplots(1, 4, figsize=(12,3))
 show(axs[0], seed1_mask, "Seed1 (bottom half)")
 show(axs[1], seed2_mask, "Seed2 (top half)")
 show(axs[2], gt_mask,    "GT (full circle)")
 show(axs[3], best_img,   f"Best (DE fit={best_fit:.1f})")
-plt.tight_layout(); plt.show()
+plt.tight_layout(); 
+plt.savefig("GeneticAlg_scCircles_result_numGen_2000.png", dpi=150)
+plt.show()
 
 plt.figure(figsize=(6,3))
 plt.plot(ga.best_solutions_fitness, marker="o", ms=3)
-plt.xlabel("Generation"); plt.ylabel("DE fitness")
-plt.grid(alpha=0.3); plt.show()
+plt.xlabel("Generation"); 
+plt.ylabel("DE fitness")
+plt.grid(alpha=0.3); 
+plt.title("GA Progress")
+plt.savefig("GeneticAlg_scCircles_progress_numGen_2000.png", dpi=150)
+plt.show()
