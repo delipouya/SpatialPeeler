@@ -13,9 +13,125 @@ import anndata as ad
 import pygad
 import time
 import scanpy as sc
-
+from scipy.stats import ttest_ind
 
 rng = np.random.default_rng(42)
+sol_per_pop = 10 #60 120
+NUM_GENS = 20
+##################################################################################
+
+
+def de_score_for_mask(mask_bool: np.ndarray,
+                      anndata,
+                      min_effect: float = 0.1,
+                      DE_criterion: str = 't_test',
+                      verbose: bool = False):
+    """
+    Compute a DE-based score for a binary mask over cells (spots).
+
+    Parameters
+    ----------
+    mask_bool : 1D array-like of length n_obs
+        Boolean mask for the 'inside' region.
+    anndata : AnnData
+        Expression matrix in .X (dense or sparse). n_obs × n_vars.
+    min_effect : float
+        Threshold for 'mean_diff' mode only: count genes with |mean_in - mean_out| > min_effect.
+    DE_criterion : {'mean_diff','t_test','t_sum','cohen_d_sum'}
+        - 'mean_diff'  -> integer count of genes with |delta mu| > min_effect
+        - 't_test'     -> integer count of genes with Welch test p < 0.05
+        - 't_sum'      -> float, mean(|Welch t|) across genes  (smooth??)
+        - 'cohen_d_sum'-> float, mean(|Cohen's d|) across genes (smooth, size-robust??)
+    verbose : bool
+        Print a few diagnostics and top genes.
+
+    Returns
+    -------
+    score : int or float
+        Depends on DE_criterion (see above).
+    """
+    # --- mask & sanity ---
+    inside  = np.asarray(mask_bool, dtype=bool).ravel()
+    outside = ~inside
+    n_in, n_out = int(inside.sum()), int(outside.sum())
+
+    assert inside.shape == (anndata.n_obs,), \
+        f"Mask length {inside.size} != n_obs {anndata.n_obs}"
+    if n_in == 0 or n_out == 0:
+        # degenerate mask
+        return 0 if DE_criterion in ('mean_diff', 't_test') else -1e9
+
+    # --- slice matrices ---
+    Xin = anndata[inside, :].X
+    Xout = anndata[outside, :].X
+    if sp.issparse(Xin):  Xin  = Xin.toarray()
+    if sp.issparse(Xout): Xout = Xout.toarray()
+
+    if verbose:
+        print("Xin/Xout shapes:", Xin.shape, Xout.shape)
+
+    # --- compute stats we’ll reuse ---
+    mu_in  = Xin.mean(axis=0)
+    mu_out = Xout.mean(axis=0)
+    # use ddof=1 for sample variance (avoid negatives with clip)
+    var_in  = np.clip(Xin.var(axis=0, ddof=1), 0, None)
+    var_out = np.clip(Xout.var(axis=0, ddof=1), 0, None)
+    diff = mu_in - mu_out
+    eps = 1e-8
+
+    if DE_criterion == 'mean_diff':
+        score = int(np.sum(np.abs(diff) > min_effect))
+        if verbose:
+            top = np.argsort(-np.abs(diff))[:10]
+            print("Top by |delta mu|:", anndata.var_names[top].tolist())
+        return score
+
+    elif DE_criterion == 't_test':
+        from scipy.stats import ttest_ind
+        _, pvals = ttest_ind(Xin, Xout, axis=0, equal_var=False)
+        score = int(np.sum(pvals < 0.05))
+        if verbose:
+            top = np.argsort(pvals)[:10]
+            print(f"DE (p<0.05): {score}; top by p:", anndata.var_names[top].tolist())
+        return score
+
+    elif DE_criterion == 't_sum':
+        # Welch t per gene, then average absolute value (smooth)
+        t = diff / np.sqrt(var_in / n_in + var_out / n_out + eps)
+        ### TODO: t includes some nans if var_in or var_out is zero?? fix this
+        mask = ~np.isnan(t)
+        # Use the boolean mask to select only the non-NaN values from the original array
+        clean_t = t[mask]
+        score = float(np.mean(np.abs(clean_t)))
+        if verbose:
+            top = np.argsort(-np.abs(t))[:10]
+            print("Top by |t|:", anndata.var_names[top].tolist())
+            print('Number of invalid t-statistics (NaN):', np.sum(np.isnan(t)))
+        return score
+
+    elif DE_criterion == 'cohen_d_sum':
+        # Cohen's d with pooled variance (more size-robust than t)
+        s2_pooled = ((n_in - 1) * var_in + (n_out - 1) * var_out) / (n_in + n_out - 2 + eps)
+        ### TODO: check for nans in s2_pooled ?? why?? fix this
+
+        mask = ~np.isnan(s2_pooled)
+        clean_s2_pooled = s2_pooled[mask]
+        clean_diff = diff[mask]
+        # Use the boolean mask to select only the non-NaN values from the original array
+        d_clean = clean_diff / np.sqrt(clean_s2_pooled + eps)
+        d = diff / np.sqrt(s2_pooled + eps) ### need this for verbose top genes
+        score = float(np.mean(np.abs(d_clean)))
+
+        if verbose:
+            top = np.argsort(-np.abs(d))[:10]
+            print("Top by |d|:", anndata.var_names[top].tolist())
+        return score
+
+    else:
+        raise ValueError("DE_criterion must be one of "
+                         "{'mean_diff','t_test','t_sum','cohen_d_sum'}")
+
+
 
 # sanity images
 def show_marker(adata_like, gene, title_suffix="", H=200, W=300):
@@ -40,6 +156,18 @@ def show_marker(adata_like, gene, title_suffix="", H=200, W=300):
     plt.show()
 
 
+def preprocess(anndata, lognorm=True, scale=False):
+### normalize using scanpy
+    if lognorm and 'log1p' not in anndata.uns_keys():
+            #sc.pp.normalize_total(anndata, target_sum=1e4)
+            sc.pp.log1p(anndata)
+
+    if scale:
+        sc.pp.scale(anndata)
+    return anndata
+
+############################################################################################
+# Main script: GA to find a spatial mask that maximizes DE genes on ground truth.
 
 # GA over full HxW mask; fitness = DE count (expected direction) on both seeds.
 # No union individual, no reindexing tricks.
@@ -84,6 +212,8 @@ seed_t = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/seed_top_cd4_i
 seed_b = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/seed_bottom_cd4_inside_b_outside_H40_W60.h5ad")
 ground_truth = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/ground_truth_cd4_inside_b_outside_H40_W60.h5ad")
 
+ground_truth = preprocess(ground_truth, lognorm=True, scale=False)
+
 for marker in marker_list:
     show_marker(seed_t, marker, "(seed top)", H=40, W=60)
     show_marker(seed_b, marker, "(seed bottom)", H=40, W=60)
@@ -98,9 +228,6 @@ adata_bottom = seed_b
 # ----------------------------
 # Initial MASK population (two seeds + noisy variants)
 # ----------------------------
-rng = np.random.default_rng(42)
-sol_per_pop = 20 #60 120
-
 
 init = [seed1_vec_mask.copy(), seed2_vec_mask.copy()]
 while len(init) < sol_per_pop:
@@ -127,156 +254,135 @@ for indiv in initial_population:
     plt.axis("off")
     plt.show()
 
+### test/debug the DE function
+mask_bool = seed1_vec_mask.astype(bool)
+anndata = ground_truth.copy()
+min_effect = 0.2
+DE_criterion = 'cohen_d_sum'
+verbose = True
+
+##############################################
+### test the DE function
+##############################################
+
+for DE_CRIT in ['mean_diff', 't_test', 't_sum', 'cohen_d_sum']:
+    print(f"\nTesting DE_criterion = '{DE_CRIT}'")
+    print("DE count/score for seed1:", de_score_for_mask(seed1_vec_mask.astype(bool), 
+                                                  ground_truth.copy(),
+                                                    min_effect=0.2,
+                                                    DE_criterion=DE_CRIT,
+                                                    verbose=True))
+    print("DE count/score for seed2:", de_score_for_mask(seed2_vec_mask.astype(bool),
+                                                    ground_truth.copy(),
+                                                        min_effect=0.2,
+                                                        DE_criterion=DE_CRIT,
+                                                        verbose=True))
+
+    print("DE count/score for GT:   ", de_score_for_mask(gt_vec_mask.astype(bool),
+                                                    ground_truth.copy(),
+                                                        min_effect=0.2,
+                                                        DE_criterion=DE_CRIT,
+                                                        verbose=True))
+    
+# sanity check
+print("Initial population DE scores:")
+init_pop_scores = {}
+for i, indiv in enumerate(initial_population):
+    for DE_CRIT in ['mean_diff', 't_test', 't_sum', 'cohen_d_sum']:
+        print(f"\nTesting DE_criterion = '{DE_CRIT}'")
+        score = de_score_for_mask(indiv.astype(bool), 
+                                  ground_truth.copy(),
+                                  verbose=True,
+                                  DE_criterion=DE_CRIT)
+        init_pop_scores[DE_CRIT] = init_pop_scores.get(DE_CRIT, [])
+        init_pop_scores[DE_CRIT].append(score)
+        print(f"Indiv {i+1:2d}: DE count = {score}")
+
+random_score_dict = {}
+### score for a random mask
+random_mask = rng.integers(0, 2, size=n_genes, dtype=np.uint8)
+for DE_CRIT in ['mean_diff', 't_test', 't_sum', 'cohen_d_sum']:
+    print(f"\nTesting DE_criterion = '{DE_CRIT}'")
+    random_score = de_score_for_mask(random_mask.astype(bool), 
+                                     ground_truth.copy(), 
+                                     verbose=True,
+                                     DE_criterion=DE_CRIT)
+    random_score_dict[DE_CRIT] = random_score
+    print(f"Random mask DE count/score = {random_score}")
+
+gt_score_dict = {}
+### score for the ground truth mask
+for DE_CRIT in ['mean_diff', 't_test', 't_sum', 'cohen_d_sum']:
+    print(f"\nTesting DE_criterion = '{DE_CRIT}'")
+    gt_score = de_score_for_mask(gt_vec_mask.astype(bool), 
+                                ground_truth.copy(), 
+                                verbose=True,
+                                DE_criterion=DE_CRIT)
+    gt_score_dict[DE_CRIT] = gt_score
+    print(f"GT mask DE count/score = {gt_score}")                
+
+for DE_CRIT in ['mean_diff', 't_test', 't_sum', 'cohen_d_sum']:
+    plt.figure(figsize=(8,4))
+    plt.hist(init_pop_scores[DE_CRIT], bins=20, color='skyblue', edgecolor='black', alpha=0.7)
+    plt.axvline(random_score_dict[DE_CRIT], color='red', linestyle='dashed', linewidth=2, label='Random Mask Score')
+    plt.axvline(gt_score_dict[DE_CRIT], color='green', linestyle='dashed', linewidth=2, label='GT Mask Score')
+    plt.title(f"Initial Population DE Scores ({DE_CRIT})")
+    plt.xlabel("DE Count/Score")
+    plt.ylabel("Frequency")
+    plt.legend()
+    plt.grid(axis='y', alpha=0.75)
+    plt.show()
+
 
 ############################################################################################
 # ----------------------------
 # fitness function
 # ----------------------------
-
-# TODO: include polarity into obj function?
-# +1 for T markers (want inside>outside), -1 for B markers (want inside<outside)
-
-def de_score_for_mask(mask_bool: np.ndarray, anndata, min_effect=0.1, 
-                         lognorm=True, scale=False, 
-                         DE_criterion='t_test', verbose=False) -> int:
-    """
-    DE score for a binary mask on the ground truth AnnData.
-    mask_bool: 1D boolean array of length n_obs 
-    anndata: AnnData with raw counts
-    min_effect: minimum absolute mean difference to count as DE (for 'mean_diff' criterion)
-    lognorm: whether to log-normalize the data
-    scale: whether to z-score the data
-    DE_criterion: 'mean_diff' or 't_test'
-
-    Returns the count of DE genes with abs(mean_in - mean_out) > min_effect
-    """
-    # Coerce to 1D boolean mask
-    inside  = np.asarray(mask_bool, dtype=bool).ravel()
-    outside = np.logical_not(inside)
-
-    # Sanity checks
-    assert inside.shape == (anndata.n_obs,), \
-        f"Mask length {inside.size} != n_obs {anndata.n_obs}"
-    if inside.sum() == 0 or outside.sum() == 0:
-        return 0
-
-    ### normalize using scanpy
-    if lognorm and 'log1p' not in anndata.uns_keys():
-            #sc.pp.normalize_total(anndata, target_sum=1e4)
-            sc.pp.log1p(anndata)
-
-    if scale:
-        sc.pp.scale(anndata)
-
-    ### end normalize
-    # Extract inside/outside expression matrices
-    gt_in  = anndata[inside, :].X
-    gt_out = anndata[outside, :].X
-
-    # Denseify if sparse
-    if sp.issparse(gt_in):  
-        gt_in = gt_in.toarray()
-    if sp.issparse(gt_out):
-        gt_out = gt_out.toarray()
-
-    # Quick sanity
-    if verbose:
-        print(gt_in.shape, gt_out.shape)  # expect (inside_sum, n_genes) and (outside_sum, n_genes)
-
-    num_DE = None
-    if DE_criterion == 'mean_diff':
-        # Mean difference criterion
-        mean_in  = gt_in.mean(axis=0)
-        mean_out = gt_out.mean(axis=0)
-        diff = mean_in - mean_out
-        num_DE = int(np.sum(np.abs(diff) > min_effect))
-        
-        top_DE_genes = np.argsort(-np.abs(diff))[:10]
-        if verbose:
-            print("Top DE genes (by mean diff):", anndata.var_names[top_DE_genes].tolist())
-
-    elif DE_criterion == 't_test':
-        # t-test criterion
-        from scipy.stats import ttest_ind
-        _, pvals = ttest_ind(gt_in, gt_out, axis=0, equal_var=False)
-        num_DE = int(np.sum(pvals < 0.05))
-
-        if verbose:
-            if num_DE > 0:
-                print(f"Found {num_DE} DE genes (p<0.05)")
-            else:
-                print("No DE genes found (p<0.05)")
-
-        top_DE_genes = np.argsort(pvals)[:10]
-        if verbose:
-            print("Top DE genes (by p-value):", anndata.var_names[top_DE_genes].tolist())
-
-
-    return num_DE
-
-##############################################
-### test the DE function
-##############################################
-print("DE count for seed1:", de_score_for_mask(seed1_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), verbose=True,
-                                                  min_effect=0.2, lognorm=True, scale=False,
-                                                  DE_criterion='mean_diff'))
-print("DE count for seed2:", de_score_for_mask(seed2_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), verbose=True,
-                                                  min_effect=0.2, lognorm=True, scale=False,
-                                                  DE_criterion='mean_diff'))
-print("DE count for GT:   ", de_score_for_mask(gt_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), verbose=True,
-                                                  min_effect=0.2, lognorm=True, scale=False,
-                                                  DE_criterion='mean_diff'))
-
-
-### test the function
-print("DE count for seed1:", de_score_for_mask(seed1_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), verbose=True,
-                                                  min_effect=0.2, lognorm=True, scale=False, 
-                                                  DE_criterion='t_test'))
-print("DE count for seed2:", de_score_for_mask(seed2_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), verbose=True,
-                                                  min_effect=0.2, lognorm=True, scale=False,
-                                                  DE_criterion='t_test'))
-print("DE count for GT:   ", de_score_for_mask(gt_vec_mask.astype(bool), 
-                                                  ground_truth.copy(), verbose=True,
-                                                  min_effect=0.2, lognorm=True, scale=False,
-                                                  DE_criterion='t_test'))
-
-# sanity check
-print("Initial population DE scores:")
-init_pop_scores = []
-for i, indiv in enumerate(initial_population):
-    score = de_score_for_mask(indiv.astype(bool), ground_truth.copy(), verbose=True,
-                              lognorm=True, scale=False, DE_criterion='t_test')
-    init_pop_scores.append(score)
-    print(f"Indiv {i+1:2d}: DE count = {score}")
-
-### score for a random mask
-random_mask = rng.integers(0, 2, size=n_genes, dtype=np.uint8)
-random_score = de_score_for_mask(random_mask.astype(bool), ground_truth.copy(), verbose=True,
-                                    lognorm=True, scale=False, DE_criterion='t_test')
-
-### histogram of initial population scores
-plt.figure(figsize=(6,4))
-plt.hist(init_pop_scores, bins=20, color='skyblue', edgecolor='black', alpha=0.7)
-plt.title("Initial Population DE Scores")
-plt.xlabel("DE Count")
-plt.ylabel("Frequency")
-plt.grid(axis='y', alpha=0.75)
-plt.show()
-##############################################
-
-
-def fitness_de(ga, sol, _):
+def fitness_de_v0(ga, sol, _):
     # GA fitness: number of DE genes on ground truth
     # sol is 0/1 vector of length H*W
     mask = sol.astype(bool, copy=False)
-    num_DEs = de_score_for_mask(mask, ground_truth.copy(), verbose=False,
-                                lognorm=True, scale=False, DE_criterion='t_test')
+    num_DEs = de_score_for_mask(mask, ground_truth.copy(), verbose=False,DE_criterion='t_test')
+    
+    ## multipy by the number of 1s to incentivize larger circles
+    num_ones = int(mask.sum())
+    num_DEs = num_DEs * num_ones / n_genes  # normalize by genome length
+
     return float(num_DEs)
+
+verbose = False
+de_mode='t_test'
+alpha=0.080     # weight of the size bonus (try 0.05–0.20)
+gamma=0.5 # concavity of the size bonus (0<gamma<1 → diminishing returns)
+def fitness_de(ga, sol, _,):     
+    mask = sol.astype(bool, copy=False)
+
+    # 1) DE signal
+    de = de_score_for_mask(mask, ground_truth, DE_criterion=de_mode, verbose=False)
+
+    # 2) Small size incentive 
+    frac_ones = float(mask.mean())               # in [0,1]
+    size_bonus = frac_ones ** gamma              # e.g., sqrt(frac) if gamma=0.5
+
+    # 3) Combine (keep DE dominant)
+    if verbose:
+        print(f"DE={de:.1f}, size_bonus={size_bonus:.3f}")
+        print(alpha * size_bonus * ground_truth.n_vars)
+    score = de + alpha * size_bonus * ground_truth.n_vars  # scale size bonus to gene count
+    return float(score)
+
+'''
+### test the fitness function
+for i, indiv in enumerate(initial_population):
+    fit = fitness_de(None, indiv, None)
+    print(f"Indiv {i+1:2d}: fitness = {fit:.2f}")
+### score for a random mask
+fit = fitness_de(None, random_mask, None)
+print(f"Random mask fitness = {fit:.2f}")
+### score for the ground truth mask
+fit = fitness_de(None, gt_vec_mask, None)
+print(f"GT mask fitness = {fit:.2f}")
+'''
 
 def total_variation(flat):
     img = flat.reshape(H, W)
@@ -302,7 +408,7 @@ def fitness_de_v2(ga, sol, _):
 # ----------------------------
 ga = pygad.GA(
     fitness_func=fitness_de,              # change to fitness_de_v2 to include TV penalty
-    num_generations=2000,
+    num_generations=NUM_GENS,
     num_parents_mating=round(len(initial_population)/2),
     #sol_per_pop=sol_per_pop,
     num_genes=n_genes,
@@ -345,16 +451,19 @@ ga.on_generation = on_generation
 t0 = time.time(); 
 ga.run(); 
 print(f"Elapsed: {time.time()-t0:.2f}s")
+
+
 ### save the GA instance
 import pickle
-with open("GeneticAlg_scCircles_ga_instance_numGen_2000.pkl", "wb") as f:
+with open("GeneticAlg_scCircles_ga_instance_numGen_"+str(NUM_GENS)+"sizescaled_DEscore.pkl", "wb") as f:
     pickle.dump(ga, f)  
+
 
 best_vec, best_fit, _ = ga.best_solution()
 best_img = best_vec.reshape(H, W)
 
 ### save the best solution
-np.save("GeneticAlg_scCircles_best_solution_numGen_2000.npy", best_vec)
+#np.save("GeneticAlg_scCircles_best_solution_numGen_2000.npy", best_vec)
 def show(ax, img, title):
     ax.imshow(img, origin="lower", cmap="gray_r", vmin=0, vmax=1)
     ax.set_title(title)
@@ -366,7 +475,7 @@ show(axs[1], seed2_mask, "Seed2 (top half)")
 show(axs[2], gt_mask,    "GT (full circle)")
 show(axs[3], best_img,   f"Best (DE fit={best_fit:.1f})")
 plt.tight_layout(); 
-plt.savefig("GeneticAlg_scCircles_result_numGen_2000.png", dpi=150)
+#plt.savefig("GeneticAlg_scCircles_result_numGen_2000.png", dpi=150)
 plt.show()
 
 plt.figure(figsize=(6,3))
@@ -375,5 +484,5 @@ plt.xlabel("Generation");
 plt.ylabel("DE fitness")
 plt.grid(alpha=0.3); 
 plt.title("GA Progress")
-plt.savefig("GeneticAlg_scCircles_progress_numGen_2000.png", dpi=150)
+#plt.savefig("GeneticAlg_scCircles_progress_numGen_2000.png", dpi=150)
 plt.show()
