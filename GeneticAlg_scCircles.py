@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import os
 
-from hiddensc.types import AnnData
 os.environ.setdefault("OMP_NUM_THREADS","1")
 os.environ.setdefault("MKL_NUM_THREADS","1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS","1")
 os.environ.setdefault("NUMEXPR_NUM_THREADS","1")
+
 import numpy as np
 import scipy.sparse as sp
 import matplotlib.pyplot as plt
@@ -14,12 +14,14 @@ import pygad
 import time
 import scanpy as sc
 from scipy.stats import ttest_ind
+from hiddensc.types import AnnData
+import pickle
 
 rng = np.random.default_rng(42)
-sol_per_pop = 10 #60 120
-NUM_GENS = 20
-##################################################################################
+sol_per_pop = 60 #60 120
+NUM_GENS = 2000
 
+##################################################################################
 
 def de_score_for_mask(mask_bool: np.ndarray,
                       anndata,
@@ -40,7 +42,6 @@ def de_score_for_mask(mask_bool: np.ndarray,
     DE_criterion : {'mean_diff','t_test','t_sum','cohen_d_sum'}
         - 'mean_diff'  -> integer count of genes with |delta mu| > min_effect
         - 't_test'     -> integer count of genes with Welch test p < 0.05
-        - 't_sum'      -> float, mean(|Welch t|) across genes  (smooth??)
         - 'cohen_d_sum'-> float, mean(|Cohen's d|) across genes (smooth, size-robust??)
     verbose : bool
         Print a few diagnostics and top genes.
@@ -73,9 +74,9 @@ def de_score_for_mask(mask_bool: np.ndarray,
     # --- compute stats we’ll reuse ---
     mu_in  = Xin.mean(axis=0)
     mu_out = Xout.mean(axis=0)
-    # use ddof=1 for sample variance (avoid negatives with clip)
-    var_in  = np.clip(Xin.var(axis=0, ddof=1), 0, None)
-    var_out = np.clip(Xout.var(axis=0, ddof=1), 0, None)
+    ## sample variance along the columns - ddof=1: divided by N-1
+    var_in  = Xin.var(axis=0, ddof=1) 
+    var_out = Xout.var(axis=0, ddof=1)
     diff = mu_in - mu_out
     eps = 1e-8
 
@@ -102,6 +103,7 @@ def de_score_for_mask(mask_bool: np.ndarray,
         mask = ~np.isnan(t)
         # Use the boolean mask to select only the non-NaN values from the original array
         clean_t = t[mask]
+        ### TODO: does it even make sense to average t values??
         score = float(np.mean(np.abs(clean_t)))
         if verbose:
             top = np.argsort(-np.abs(t))[:10]
@@ -113,7 +115,6 @@ def de_score_for_mask(mask_bool: np.ndarray,
         # Cohen's d with pooled variance (more size-robust than t)
         s2_pooled = ((n_in - 1) * var_in + (n_out - 1) * var_out) / (n_in + n_out - 2 + eps)
         ### TODO: check for nans in s2_pooled ?? why?? fix this
-
         mask = ~np.isnan(s2_pooled)
         clean_s2_pooled = s2_pooled[mask]
         clean_diff = diff[mask]
@@ -165,6 +166,12 @@ def preprocess(anndata, lognorm=True, scale=False):
     if scale:
         sc.pp.scale(anndata)
     return anndata
+
+
+def show(ax, img, title):
+    ax.imshow(img, origin="lower", cmap="gray_r", vmin=0, vmax=1)
+    ax.set_title(title)
+    ax.axis("off")
 
 ############################################################################################
 # Main script: GA to find a spatial mask that maximizes DE genes on ground truth.
@@ -338,6 +345,21 @@ for DE_CRIT in ['mean_diff', 't_test', 't_sum', 'cohen_d_sum']:
 # ----------------------------
 # fitness function
 # ----------------------------
+
+verbose = False
+de_mode='t_test'
+alpha=0.15     # weight of the size bonus (try 0.05–0.20)
+gamma=0.5 # concavity of the size bonus (0<gamma<1 → diminishing returns)
+# fitness with TV penalty
+lam_tv = 0.006  # tiny; tune 0.004–0.012
+
+
+def total_variation(flat):
+    img = flat.reshape(H, W)
+    edges = np.sum(img[:,1:] != img[:,:-1]) + np.sum(img[1:,:] != img[:-1,:])
+    return edges / (H*(W-1) + (H-1)*W)
+
+
 def fitness_de_v0(ga, sol, _):
     # GA fitness: number of DE genes on ground truth
     # sol is 0/1 vector of length H*W
@@ -350,11 +372,8 @@ def fitness_de_v0(ga, sol, _):
 
     return float(num_DEs)
 
-verbose = False
-de_mode='t_test'
-alpha=0.080     # weight of the size bonus (try 0.05–0.20)
-gamma=0.5 # concavity of the size bonus (0<gamma<1 → diminishing returns)
-def fitness_de(ga, sol, _,):     
+
+def fitness_de_v1(ga, sol, _,):     
     mask = sol.astype(bool, copy=False)
 
     # 1) DE signal
@@ -371,6 +390,37 @@ def fitness_de(ga, sol, _,):
     score = de + alpha * size_bonus * ground_truth.n_vars  # scale size bonus to gene count
     return float(score)
 
+
+def fitness_de_v2(ga, sol, _):
+    # GA fitness: sum DE counts across both seeds - λ·TV
+
+    mask = sol.astype(bool, copy=False)
+    num_DEs = de_score_for_mask(mask, ground_truth.copy(), 
+                                lognorm=True, scale=False, DE_criterion='t_test')
+    tv = total_variation(sol)
+    n_markers = ground_truth.n_vars
+    
+    return float(num_DEs - lam_tv * tv * n_markers)
+
+
+def fitness_de(ga, sol, _,):     
+    mask = sol.astype(bool, copy=False)
+
+    # 1) DE signal
+    de = de_score_for_mask(mask, ground_truth, DE_criterion=de_mode, verbose=False)
+
+    # 2) Small size incentive 
+    frac_ones = float(mask.mean())               # in [0,1]
+    size_bonus = frac_ones ** gamma              # e.g., sqrt(frac) if gamma=0.5
+
+    # 3) Combine (keep DE dominant)
+    if verbose:
+        print(f"DE={de:.1f}, size_bonus={size_bonus:.3f}")
+        print(alpha * size_bonus * ground_truth.n_vars)
+    score = de * size_bonus # scale size bonus to gene count
+    return float(score)
+
+
 '''
 ### test the fitness function
 for i, indiv in enumerate(initial_population):
@@ -383,24 +433,6 @@ print(f"Random mask fitness = {fit:.2f}")
 fit = fitness_de(None, gt_vec_mask, None)
 print(f"GT mask fitness = {fit:.2f}")
 '''
-
-def total_variation(flat):
-    img = flat.reshape(H, W)
-    edges = np.sum(img[:,1:] != img[:,:-1]) + np.sum(img[1:,:] != img[:-1,:])
-    return edges / (H*(W-1) + (H-1)*W)
-
-# fitness with TV penalty
-lam_tv = 0.006  # tiny; tune 0.004–0.012
-def fitness_de_v2(ga, sol, _):
-    # GA fitness: sum DE counts across both seeds - λ·TV
-
-    mask = sol.astype(bool, copy=False)
-    num_DEs = de_score_for_mask(mask, ground_truth.copy(), 
-                                lognorm=True, scale=False, DE_criterion='t_test')
-    tv = total_variation(sol)
-    n_markers = ground_truth.n_vars
-    
-    return float(num_DEs - lam_tv * tv * n_markers)
 
 
 # ----------------------------
@@ -454,20 +486,14 @@ print(f"Elapsed: {time.time()-t0:.2f}s")
 
 
 ### save the GA instance
-import pickle
-with open("GeneticAlg_scCircles_ga_instance_numGen_"+str(NUM_GENS)+"sizescaled_DEscore.pkl", "wb") as f:
+with open("GeneticAlg_scCircles_ga_instance_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.pkl", "wb") as f:
     pickle.dump(ga, f)  
-
 
 best_vec, best_fit, _ = ga.best_solution()
 best_img = best_vec.reshape(H, W)
 
 ### save the best solution
-#np.save("GeneticAlg_scCircles_best_solution_numGen_2000.npy", best_vec)
-def show(ax, img, title):
-    ax.imshow(img, origin="lower", cmap="gray_r", vmin=0, vmax=1)
-    ax.set_title(title)
-    ax.axis("off")
+np.save("GeneticAlg_scCircles_best_solution_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.npy", best_vec)
 
 fig, axs = plt.subplots(1, 4, figsize=(12,3))
 show(axs[0], seed1_mask, "Seed1 (bottom half)")
@@ -475,7 +501,7 @@ show(axs[1], seed2_mask, "Seed2 (top half)")
 show(axs[2], gt_mask,    "GT (full circle)")
 show(axs[3], best_img,   f"Best (DE fit={best_fit:.1f})")
 plt.tight_layout(); 
-#plt.savefig("GeneticAlg_scCircles_result_numGen_2000.png", dpi=150)
+plt.savefig("GeneticAlg_scCircles_result_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.png", dpi=150)
 plt.show()
 
 plt.figure(figsize=(6,3))
@@ -484,5 +510,5 @@ plt.xlabel("Generation");
 plt.ylabel("DE fitness")
 plt.grid(alpha=0.3); 
 plt.title("GA Progress")
-#plt.savefig("GeneticAlg_scCircles_progress_numGen_2000.png", dpi=150)
+plt.savefig("GeneticAlg_scCircles_progress_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.png", dpi=150)
 plt.show()
