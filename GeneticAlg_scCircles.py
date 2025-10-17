@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import os
-
 os.environ.setdefault("OMP_NUM_THREADS","1")
 os.environ.setdefault("MKL_NUM_THREADS","1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS","1")
@@ -18,8 +17,6 @@ from hiddensc.types import AnnData
 import pickle
 
 rng = np.random.default_rng(42)
-sol_per_pop = 60 #60 120
-NUM_GENS = 2000
 
 ##################################################################################
 
@@ -181,7 +178,7 @@ def show(ax, img, title):
 
 # ----------------------------
 # defining the grid Geometry: circle + seeds as masks
-H, W = 40, 60
+H, W = 200, 300#40, 60
 y, x  = np.ogrid[:H, :W]
 cy, cx = H/2, W/2
 r = min(H, W) * 0.30
@@ -215,16 +212,21 @@ b_markers_all = ["MS4A1","CD79A","CD79B","CD19"]
 marker_list = ['IL32','CD2','MS4A1','CD19','PRF1','GZMA','GZMK',
               'NKG7','PDCD1','TIGIT','CD79A','CD79B']
 
-seed_t = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/seed_top_cd4_inside_b_outside_H40_W60.h5ad")
-seed_b = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/seed_bottom_cd4_inside_b_outside_H40_W60.h5ad")
-ground_truth = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/ground_truth_cd4_inside_b_outside_H40_W60.h5ad")
+#seed_t = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/seed_top_cd4_inside_b_outside_H40_W60.h5ad")
+#seed_b = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/seed_bottom_cd4_inside_b_outside_H40_W60.h5ad")
+#ground_truth = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/ground_truth_cd4_inside_b_outside_H40_W60.h5ad")
+
+
+seed_t = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/seed_top_cd4_inside_b_outside_H200_W300.h5ad")
+seed_b = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/seed_bottom_cd4_inside_b_outside_H200_W300.h5ad")
+ground_truth = ad.read_h5ad("/home/delaram/SpatialPeeler/Data/scCircles/ground_truth_cd4_inside_b_outside_H200_W300.h5ad")
 
 ground_truth = preprocess(ground_truth, lognorm=True, scale=False)
 
 for marker in marker_list:
-    show_marker(seed_t, marker, "(seed top)", H=40, W=60)
-    show_marker(seed_b, marker, "(seed bottom)", H=40, W=60)
-    show_marker(ground_truth, marker,"(ground truth)", H=40, W=60)
+    show_marker(seed_t, marker, "(seed top)", H=200, W=300)
+    show_marker(seed_b, marker, "(seed bottom)", H=200, W=300)
+    show_marker(ground_truth, marker,"(ground truth)", H=200, W=300)
 
 assert seed_t.n_obs == H*W and seed_b.n_obs == H*W, "Obs must be H*W."
 assert np.all(seed_t.var_names == seed_b.var_names), "Gene order must match."
@@ -232,6 +234,12 @@ assert np.all(seed_t.var_names == seed_b.var_names), "Gene order must match."
 adata_top    = seed_t
 adata_bottom = seed_b
 
+
+############################################################################################
+############################################################################################
+
+sol_per_pop = 10 #60 120
+NUM_GENS = 20#2000
 # ----------------------------
 # Initial MASK population (two seeds + noisy variants)
 # ----------------------------
@@ -265,7 +273,7 @@ for indiv in initial_population:
 mask_bool = seed1_vec_mask.astype(bool)
 anndata = ground_truth.copy()
 min_effect = 0.2
-DE_criterion = 'cohen_d_sum'
+DE_criterion = 't_test'
 verbose = True
 
 ##############################################
@@ -349,7 +357,7 @@ for DE_CRIT in ['mean_diff', 't_test', 't_sum', 'cohen_d_sum']:
 verbose = False
 de_mode='t_test'
 alpha=0.15     # weight of the size bonus (try 0.05–0.20)
-gamma=0.5 # concavity of the size bonus (0<gamma<1 → diminishing returns)
+gamma=1
 # fitness with TV penalty
 lam_tv = 0.006  # tiny; tune 0.004–0.012
 
@@ -358,6 +366,45 @@ def total_variation(flat):
     img = flat.reshape(H, W)
     edges = np.sum(img[:,1:] != img[:,:-1]) + np.sum(img[1:,:] != img[:-1,:])
     return edges / (H*(W-1) + (H-1)*W)
+
+
+def isolated_ones_fraction(flat, neigh_thresh=2):
+    """Fraction of 1s with <2 neighbors in 8-neighborhood (suppresses speckles).
+    For a pixel at (i,j), we want the sum of its 8 neighbors:
+    (i-1,j-1)  (i-1,j)  (i-1,j+1)
+    (i,  j-1)      *     (i,  j+1)
+    (i+1,j-1)  (i+1,j)  (i+1,j+1)
+
+    Naive double loop solution (slower):
+    for i in range(1, H-1):
+        for j in range(1, W-1):
+            neigh[i,j] = (
+                z[i-1,j-1] + z[i-1,j] + z[i-1,j+1] +
+                z[i,  j-1]            + z[i,  j+1] +
+                z[i+1,j-1] + z[i+1,j] + z[i+1,j+1]
+            )
+    vectorized implementation of the loop is provided in this function:
+    """
+
+    img = flat.reshape(H, W)
+    z = np.pad(img, 1, mode="constant")
+    ## sum of neighbors for each pixel 
+    neigh = (
+        z[0:-2,0:-2] + z[0:-2,1:-1] + z[0:-2,2:] +
+        z[1:-1,0:-2]                + z[1:-1,2:] +
+        z[2:  ,0:-2] + z[2:  ,1:-1] + z[2:  ,2:]
+    )
+    
+    ### boolean array indicating which pixels are 1s
+    ones = (img == 1)
+
+    if ones.sum() == 0:
+        return 0.0
+    
+    ## binary array indicating which 1s are isolated (have <neigh_thresh neighbors)
+    isolated_ones = neigh[ones] < neigh_thresh
+
+    return float(np.mean(isolated_ones)) ## fraction of isolated 1s
 
 
 def fitness_de_v0(ga, sol, _):
@@ -392,7 +439,7 @@ def fitness_de_v1(ga, sol, _,):
 
 
 def fitness_de_v2(ga, sol, _):
-    # GA fitness: sum DE counts across both seeds - λ·TV
+    # GA fitness: sum DE counts across both seeds - gamma·TV
 
     mask = sol.astype(bool, copy=False)
     num_DEs = de_score_for_mask(mask, ground_truth.copy(), 
@@ -403,6 +450,13 @@ def fitness_de_v2(ga, sol, _):
     return float(num_DEs - lam_tv * tv * n_markers)
 
 
+
+lam_tv = 0.006  # tiny; tune 0.004–0.012
+
+
+
+lam_iso = 0.35  # weight of isolated 1s penalty
+gamma = 1
 def fitness_de(ga, sol, _,):     
     mask = sol.astype(bool, copy=False)
 
@@ -416,12 +470,32 @@ def fitness_de(ga, sol, _,):
     # 3) Combine (keep DE dominant)
     if verbose:
         print(f"DE={de:.1f}, size_bonus={size_bonus:.3f}")
-        print(alpha * size_bonus * ground_truth.n_vars)
-    score = de * size_bonus # scale size bonus to gene count
+    
+    #tv = total_variation(sol)
+    isolated_frac = isolated_ones_fraction(sol, neigh_thresh=2)
+    #score = de * size_bonus 
+    score = (de * size_bonus) * (1 - lam_iso * isolated_frac)
+    
     return float(score)
 
 
 '''
+### test isolated_ones_fraction values for all initial population
+for i, indiv in enumerate(initial_population):
+    isolated_frac = isolated_ones_fraction(indiv, neigh_thresh=2)
+    print(f"Indiv {i+1:2d}: isolated fraction = {isolated_frac:.2f}")
+
+    fit = fitness_de(None, indiv, None)
+    print(f"Indiv {i+1:2d}: fitness = {fit:.2f}")
+
+### test for a random mask
+isolated_frac = isolated_ones_fraction(random_mask, neigh_thresh=2)
+print(f"Random mask isolated fraction = {isolated_frac:.2f}")
+fit = fitness_de(None, random_mask, None)
+print(f"Random mask fitness = {fit:.2f}")
+
+
+
 ### test the fitness function
 for i, indiv in enumerate(initial_population):
     fit = fitness_de(None, indiv, None)
@@ -449,14 +523,14 @@ ga = pygad.GA(
     initial_population=initial_population,
 
     parent_selection_type="tournament",
-    K_tournament=9,
-    keep_parents=4,
+    K_tournament=3, ## change this from 3-10 for selection pressure - smaller means weaker, bigger could cause low parent diversity -> local optima
+    keep_parents=round(len(initial_population)/2),
 
     crossover_type="two_points",
     crossover_probability=1.0,
 
     mutation_type="random",
-    mutation_probability=0.60,
+    mutation_probability=0,#0.60,
     mutation_num_genes=max(1, int(0.08*n_genes)),
 
     stop_criteria=["saturate_600"],
@@ -486,14 +560,14 @@ print(f"Elapsed: {time.time()-t0:.2f}s")
 
 
 ### save the GA instance
-with open("GeneticAlg_scCircles_ga_instance_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.pkl", "wb") as f:
-    pickle.dump(ga, f)  
+#with open("GeneticAlg_scCircles_ga_instance_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.pkl", "wb") as f:
+#    pickle.dump(ga, f)  
 
 best_vec, best_fit, _ = ga.best_solution()
 best_img = best_vec.reshape(H, W)
 
 ### save the best solution
-np.save("GeneticAlg_scCircles_best_solution_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.npy", best_vec)
+#np.save("GeneticAlg_scCircles_best_solution_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.npy", best_vec)
 
 fig, axs = plt.subplots(1, 4, figsize=(12,3))
 show(axs[0], seed1_mask, "Seed1 (bottom half)")
@@ -501,7 +575,7 @@ show(axs[1], seed2_mask, "Seed2 (top half)")
 show(axs[2], gt_mask,    "GT (full circle)")
 show(axs[3], best_img,   f"Best (DE fit={best_fit:.1f})")
 plt.tight_layout(); 
-plt.savefig("GeneticAlg_scCircles_result_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.png", dpi=150)
+#plt.savefig("GeneticAlg_scCircles_result_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.png", dpi=150)
 plt.show()
 
 plt.figure(figsize=(6,3))
@@ -510,5 +584,5 @@ plt.xlabel("Generation");
 plt.ylabel("DE fitness")
 plt.grid(alpha=0.3); 
 plt.title("GA Progress")
-plt.savefig("GeneticAlg_scCircles_progress_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.png", dpi=150)
+#plt.savefig("GeneticAlg_scCircles_progress_numGen_"+str(NUM_GENS)+"_sizescaled_DEscore.png", dpi=150)
 plt.show()

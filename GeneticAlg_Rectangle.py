@@ -1,161 +1,4 @@
 #!/usr/bin/env python3
-import os
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
-
-import numpy as np
-import matplotlib.pyplot as plt
-import pygad
-
-
-def plot_img(img, title=""):
-    plt.figure(figsize=(6,4))
-    plt.imshow(img, origin="lower", cmap="gray_r", vmin=0, vmax=1)
-    plt.title(title)
-    plt.axis("off")
-    plt.tight_layout(); 
-    plt.show()
-
-# ----------------------------
-# 1) Build rectangle dataset
-# ----------------------------
-H, W = 20, 30
-rect_h, rect_w = 10, 16
-cy, cx = H // 2, W // 2
-y0, y1 = cy - rect_h // 2, cy + (rect_h - rect_h // 2)
-x0, x1 = cx - rect_w // 2, cx + (rect_w - rect_w // 2)
-
-rect_mask = np.zeros((H, W), dtype=bool)
-rect_mask[y0:y1, x0:x1] = True
-
-seed1 = np.zeros((H, W), np.uint8) 
-seed1[cy:y1, x0:x1] = 1   # bottom half
-seed2 = np.zeros((H, W), np.uint8) 
-seed2[y0:cy, x0:x1] = 1   # top half
-gt    = np.zeros((H, W), np.uint8) 
-gt[rect_mask]       = 1   # full rect
-
-seed1_vec, seed2_vec, gt_vec = seed1.ravel(), seed2.ravel(), gt.ravel()
-n_genes = gt_vec.size
-
-### visualize seeds & GT separately (optional)
-plot_img(seed1, "SEED1 (top half)")
-plot_img(seed2, "SEED2 (bottom half)")
-plot_img(gt, "GROUND TRUTH")
-
-# ----------------------------
-# 2) Fitness function
-# ----------------------------
-def fitness_func(ga, sol, _):
-    tp = np.sum((sol == 1) & (gt_vec == 1))
-    tn = np.sum((sol == 0) & (gt_vec == 0))
-    fp = np.sum((sol == 1) & (gt_vec == 0))
-    fn = np.sum((sol == 0) & (gt_vec == 1))
-
-    # penalize false negatives strongly, false positives mildly
-    return tp + 0.5*tn - 2*fn - 1*fp
-
-beta = 9
-pos  = (gt_vec == 1)
-neg  = ~pos
-def fitness_fbeta(ga, sol, idx):
-    TP = np.sum((sol == 1) & pos, dtype=np.int32)
-    FP = np.sum((sol == 1) & neg, dtype=np.int32)
-    FN = np.sum((sol == 0) & pos, dtype=np.int32)
-    return float((1+beta)*TP) / ((1+beta)*TP + beta*FN + FP + 1e-9)  # [0,1]
-
-def fitness_fbeta1(ga, sol, idx):
-    TP = np.sum((sol == 1) & pos, dtype=np.int32)
-    TN = np.sum((sol == 0) & neg, dtype=np.int32)
-    FP = np.sum((sol == 1) & neg, dtype=np.int32)
-    FN = np.sum((sol == 0) & pos, dtype=np.int32)
-    return float((1+beta)*TP + 0.5*(1+beta)*TN) / ((1+beta)*TP + 0.5*(1+beta)*TN + beta*FN + FP + 1e-9) 
-
-# ----------------------------
-# 3) Initial population
-# ----------------------------
-rng = np.random.default_rng(42)
-sol_per_pop = 20
-init = [seed1_vec.copy(), seed2_vec.copy()]
-while len(init) < sol_per_pop:
-    base = seed1_vec if (len(init) % 2 == 0) else seed2_vec
-    indiv = base.copy()
-    m = max(1, int(0.1 * n_genes))  # ~2% flips
-    flip = rng.choice(n_genes, size=m, replace=False)
-    indiv[flip] ^= 1
-    init.append(indiv)
-initial_population = np.stack(init, axis=0).astype(np.uint8, copy=False)
-
-counter=1
-for indiv in initial_population:
-    ## convert indiv to a HxW image and visualize
-    img = indiv.reshape(H, W)
-    plot_img(img, 'indiv'+str(counter))
-    counter += 1
-# 4) GA config
-# ----------------------------
-
-## calculate fitness of initial population with both functions
-for i, indiv in enumerate(initial_population):
-    fit1 = fitness_func(None, indiv, i)
-    fit2 = fitness_fbeta(None, indiv, i)
-    fit3 = fitness_fbeta1(None, indiv, i)
-    print(f"Indiv {i+1}: fitness_func={fit1:.2f}, fitness_fbeta={fit2:.4f}, fitness_fbeta1={fit3:.4f}")
-
-
-ga = pygad.GA(
-    fitness_func=fitness_fbeta1,
-    num_generations=10000,
-    num_parents_mating=20,
-    sol_per_pop=sol_per_pop,
-    num_genes=n_genes,
-    gene_space=[0, 1],
-    gene_type=np.uint8,
-    initial_population=initial_population,
-
-    parent_selection_type="tournament",
-    K_tournament=5,
-    keep_parents=2,
-
-    crossover_type="single_point",
-    crossover_probability=0.9,
-
-    mutation_type="random",
-    mutation_probability=0.2,
-    mutation_num_genes=max(1, int(0.02 * n_genes)),
-
-    stop_criteria=["saturate_400"],
-)
-
-ga.run()
-best_vec, best_fit, _ = ga.best_solution()
-best_img = best_vec.reshape(H, W)
-plot_img(best_img, 'best image')
-
-# ----------------------------
-# Visualize fitness over generations
-# ----------------------------
-
-plt.figure(figsize=(6,3))
-plt.plot(ga.best_solutions_fitness, marker="o", ms=3)
-plt.xlabel("Generation")
-plt.ylabel("Fitness")
-plt.grid(alpha=0.3)
-plt.show()
-
-
-
-
-
-
-
-
-
-
-
-#!/usr/bin/env python3
 # Full-grid GA for rectangle union (no union individual, no indexing tricks)
 
 import os
@@ -178,15 +21,18 @@ cy, cx = H//2, W//2
 y0, y1 = cy - rect_h//2, cy + (rect_h - rect_h//2)
 x0, x1 = cx - rect_w//2, cx + (rect_w - rect_w//2)
 
-seed1 = np.zeros((H,W), np.uint8); seed1[cy:y1, x0:x1] = 1   # bottom half
-seed2 = np.zeros((H,W), np.uint8); seed2[y0:cy, x0:x1] = 1   # top half
-gt    = np.zeros((H,W), np.uint8); gt[y0:y1, x0:x1]   = 1    # full rect
+seed1 = np.zeros((H,W), np.uint8)
+seed1[cy:y1, x0:x1] = 1   # bottom half
+seed2 = np.zeros((H,W), np.uint8)
+seed2[y0:cy, x0:x1] = 1   # top half
+gt    = np.zeros((H,W), np.uint8)
+gt[y0:y1, x0:x1]   = 1    # full rect
 
 seed1_vec, seed2_vec, gt_vec = seed1.ravel(), seed2.ravel(), gt.ravel()
 n_genes = H*W
 
 # ----------------------------
-# Fitness: Fβ (β² weighting) minus small smoothness penalties
+# Fitness functions - different variants
 # ----------------------------
 beta = 10.0         # recall weight (penalize FN >> FP); try 6–12
 b2   = beta*beta
@@ -225,6 +71,32 @@ def fitness(ga, sol, _):
     iso   = isolated_ones_fraction(sol)
     return float(fbeta - lam_tv*tv - lam_iso*iso)
 
+
+def fitness_func(ga, sol, _):
+    tp = np.sum((sol == 1) & (gt_vec == 1))
+    tn = np.sum((sol == 0) & (gt_vec == 0))
+    fp = np.sum((sol == 1) & (gt_vec == 0))
+    fn = np.sum((sol == 0) & (gt_vec == 1))
+
+    # penalize false negatives strongly, false positives mildly
+    return tp + 0.5*tn - 2*fn - 1*fp
+
+beta = 9
+pos  = (gt_vec == 1)
+neg  = ~pos
+def fitness_fbeta(ga, sol, idx):
+    TP = np.sum((sol == 1) & pos, dtype=np.int32)
+    FP = np.sum((sol == 1) & neg, dtype=np.int32)
+    FN = np.sum((sol == 0) & pos, dtype=np.int32)
+    return float((1+beta)*TP) / ((1+beta)*TP + beta*FN + FP + 1e-9)  # [0,1]
+
+def fitness_fbeta1(ga, sol, idx):
+    TP = np.sum((sol == 1) & pos, dtype=np.int32)
+    TN = np.sum((sol == 0) & neg, dtype=np.int32)
+    FP = np.sum((sol == 1) & neg, dtype=np.int32)
+    FN = np.sum((sol == 0) & pos, dtype=np.int32)
+    return float((1+beta)*TP + 0.5*(1+beta)*TN) / ((1+beta)*TP + 0.5*(1+beta)*TN + beta*FN + FP + 1e-9) 
+
 # ----------------------------
 # Initial population: ONLY noisy variants of the two seeds
 # ----------------------------
@@ -241,7 +113,7 @@ while len(init) < sol_per_pop:
 initial_population = np.stack(init, axis=0).astype(np.uint8, copy=False)
 
 # ----------------------------
-# GA configuration (strong pressure + annealed mutation)
+# GA configuration 
 # ----------------------------
 ga = pygad.GA(
     fitness_func=fitness,

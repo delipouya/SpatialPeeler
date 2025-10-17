@@ -47,7 +47,7 @@ assert ct_out in adata.obs["louvain"].unique(), f"Missing {ct_out}"
 # ---------------------------
 # Make a spatial grid + circle mask
 rng = np.random.default_rng(42)
-H, W = 40, 60#200, 300        # grid height × width
+H, W = 200, 300    #40, 60    # grid height × width
 y, x = np.ogrid[:H, :W]
 
 cy, cx = H / 2, W / 2
@@ -133,7 +133,7 @@ half_circle_mask_top = circle_mask & (y > cy)  # half circle on top of cy -> 387
 half_circle_mask_bottom = circle_mask & (y < cy)  # half circle on bottom of cy -> 3872 true elements
 
 half_circle_mask = None
-HALF_CIRC = "BOTTOM"  # "TOP" or "BOTTOM"
+HALF_CIRC = "TOP"  # "TOP" or "BOTTOM"
 
 if HALF_CIRC == "BOTTOM":
     half_circle_mask = half_circle_mask_bottom
