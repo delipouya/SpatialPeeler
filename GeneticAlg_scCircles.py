@@ -48,7 +48,7 @@ def de_score_for_mask(mask_bool: np.ndarray,
     score : int or float
         Depends on DE_criterion (see above).
     """
-    # --- mask & sanity ---
+    # --- mask  and sanity check ---
     inside  = np.asarray(mask_bool, dtype=bool).ravel()
     outside = ~inside
     n_in, n_out = int(inside.sum()), int(outside.sum())
@@ -238,7 +238,7 @@ adata_bottom = seed_b
 ############################################################################################
 ############################################################################################
 
-sol_per_pop = 10 #60 120
+sol_per_pop = 30 #60 120
 NUM_GENS = 20#2000
 # ----------------------------
 # Initial MASK population (two seeds + noisy variants)
@@ -262,7 +262,8 @@ counter=1
 for indiv in initial_population:
     ### visualize the chromosome
     plt.figure(figsize=(6, 4))
-    plt.imshow(indiv.reshape(H, W), origin='lower', interpolation='nearest', 
+    plt.imshow(indiv.reshape(H, W), origin='lower', 
+               interpolation='nearest', 
         cmap="gray_r", vmin=0, vmax=1)
     plt.title(f"Initial Population Chromosome {counter}")
     counter += 1
@@ -363,6 +364,7 @@ lam_tv = 0.006  # tiny; tune 0.004–0.012
 
 
 def total_variation(flat):
+    # normlized total horizontal disagreements (between column c and c+1) and vertical disagreements (between row r and r+1) 
     img = flat.reshape(H, W)
     edges = np.sum(img[:,1:] != img[:,:-1]) + np.sum(img[1:,:] != img[:-1,:])
     return edges / (H*(W-1) + (H-1)*W)
@@ -455,8 +457,8 @@ lam_tv = 0.006  # tiny; tune 0.004–0.012
 
 
 
-lam_iso = 0.35  # weight of isolated 1s penalty
-gamma = 1
+lam_iso = 0.5  # weight of isolated 1s penalty
+gamma = 1.5
 def fitness_de(ga, sol, _,):     
     mask = sol.astype(bool, copy=False)
 

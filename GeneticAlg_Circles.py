@@ -69,8 +69,6 @@ for indiv in initial_population:
 # Fitness functions
 # ---------------------------
 # ----------------------------
-# Fitness: Fβ (β²)  – lambda_tv * TV – lambda_iso * ISO
-# ----------------------------
 beta = 8.0  # beta>1 weights recall (penalizes false negatives) more than precision (FN >> FP); try 6–12
 b2   = beta*beta
 pos  = (gt_vec == 1)
@@ -91,7 +89,7 @@ def total_variation(flat):
     v_edges = np.sum(img[1:,:] != img[:-1,:])
 
     edges = h_edges + v_edges
-    total_4_neighbor_edges = H*(W-1) + (H-1)*W
+    total_4_neighbor_edges = H*(W-1) + (H-1)*W #
     return edges / total_4_neighbor_edges
 
 
