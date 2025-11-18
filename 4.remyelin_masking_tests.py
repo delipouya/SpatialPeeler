@@ -27,13 +27,13 @@ np.random.seed(RAND_SEED)
 CASE_COND_NAME = 'LPC'
 
 
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
-#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
 with open(results_path, 'rb') as f:
     results = pickle.load(f)
 
-outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
-#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 adata = sc.read_h5ad(outp)
 
 adata.obs['binary_label'] = adata.obs['Condition'].apply(lambda x: 1 if x == 'LPC' else 0)
@@ -42,12 +42,12 @@ sample_ids = adata.obs['sample_id'].unique().tolist()
 
 
 #### uncropped - t3_7 indices
-GOF_index = [21, 1, 9, 22, 24]
-LOF_index = [0, 27, 12, 5, 19]
+#GOF_index = [21, 1, 9, 22, 24]
+#LOF_index = [0, 27, 12, 5, 19]
 
 #### uncropped - t18 indices
-#GOF_index = [18, 12, 9, 20, 14]
-#LOF_index = [3, 19, 23, 25]
+GOF_index = [18, 12, 9, 20, 14]
+LOF_index = [3, 19, 23, 25]
 
 cluster_mask_dict = {}
 factor_idx = GOF_index[1]
