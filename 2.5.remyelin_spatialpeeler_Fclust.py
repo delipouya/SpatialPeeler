@@ -105,7 +105,8 @@ nmf_long = nmf_df.melt(id_vars='sample_id',
                        var_name='Factor', 
                        value_name='Score')
 plt.figure(figsize=(16, 6))
-sns.violinplot(x="Factor", y="Score", hue="sample_id", data=nmf_long, inner="box", palette="Set2")
+sns.violinplot(x="Factor", y="Score", hue="sample_id", data=nmf_long, 
+               inner="box", palette="Set2")
 plt.title("Distribution of NMF Across Samples")
 plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), 
            loc='upper left')
@@ -155,7 +156,8 @@ def standalone_logistic(X, y):
 GOF_index = [21, 1, 9, 22, 24]
 LOF_index = [0, 27, 12, 5, 19]
 
-
+visualize_each_factor = False
+exception_vis = True
 #def single_factor_logistic_evaluation_Fclust(adata, factor_key="X_nmf", max_factors=30):
 factor_key = "X_nmf"
 max_factors = 30
@@ -163,35 +165,45 @@ all_results = []
 X = adata.obsm[factor_key]
 y = adata.obs["status"].values
 sample_ids = adata.obs["sample_id"].values
+i = 0
 
 for i in range(min(max_factors, X.shape[1])):
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
-    print("X i: ", Xi)
-    print(Xi.min(), Xi.max())
+    #print("X i: ", Xi)
+    #print(Xi.min(), Xi.max())
 
-
-    ### cluster the Xi into 2 clusters 
-    plt.figure(figsize=(5, 5))
-    sns.histplot(Xi, bins=30, kde=True)
-    plt.title(f"Factor {i+1}")
-    plt.xlabel("Factor scores nmf-clust spots")
-    plt.ylabel("Count")
-    plt.show()
+    if visualize_each_factor:
+        ### cluster the Xi into 2 clusters 
+        plt.figure(figsize=(5, 5))
+        sns.histplot(Xi, bins=30, kde=True)
+        plt.title(f"Factor {i+1}")
+        plt.xlabel("Factor scores for all spots")
+        plt.ylabel("Count")
+        plt.show()
     
     kmeans = KMeans(n_clusters=2, random_state=RAND_SEED)
     kmeans.fit(Xi.reshape(-1, 1))
     centers = kmeans.cluster_centers_.ravel()
-    order = np.argsort(centers)               # [low_center_label, high_center_label]
+    print(centers)
+    order = np.argsort(centers)               # [low_center_label, high_cluster_label]
+    print(order)
     remap = {order[0]: 0, order[1]: 1}
+    print(remap)
     labels_remapped = np.vectorize(remap.get)(kmeans.labels_).astype(int)
+    
+    print('original labels: ', kmeans.labels_)
+    print("Labels remapped: ", labels_remapped)
+    print('cluster-0 min/max:', Xi[labels_remapped == 0].min(), Xi[labels_remapped == 0].max())
+    print('cluster-1 min/max:', Xi[labels_remapped == 1].min(), Xi[labels_remapped == 1].max())
+
     # Calculate the threshold as the midpoint between the centroids
     threshold = np.mean(centers)
-    print(f"Centroids: {centers.flatten()}")
-    print(f"Binarization Threshold: {threshold}")
+    #print(f"Centroids: {centers.flatten()}")
+    #print(f"Binarization Threshold: {threshold}")
 
     ### only use Xi with high mean cluster for the logistic regression
-    high_cluster_label = order[1]
+    high_cluster_label = 1
     high_cluster_indices = np.where(labels_remapped == high_cluster_label)[0]
     Xi_high = Xi[high_cluster_indices]
     y_high = y[high_cluster_indices]
@@ -205,7 +217,8 @@ for i in range(min(max_factors, X.shape[1])):
         sample_id: adata[adata.obs['sample_id'] == sample_id].copy()
         for sample_id in sample_ids
     }
-    plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_cluster', 
+    if visualize_each_factor:
+        plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_cluster', 
                title_prefix=f"Factor {i+1} Clusters", 
                from_obsm=False, figsize=(43, 30), fontsize=45,
                 dot_size=50) #figsize=(42, 30), fontsize=45 
@@ -227,42 +240,62 @@ for i in range(min(max_factors, X.shape[1])):
         "p_hat": p_hat,
         "logit_p_hat": logit_p_hat,
         "status": y,
-        "sample_id": sample_ids
+        "sample_id": sample_ids,
+        'high_cluster_indices': high_cluster_indices,
+        'Xi_high': Xi_high,
+        'y_high': y_high
         }
     
     all_results.append(result)
 
     ## make a histogram of p_hat for the high-expression cluster
-    plt.figure(figsize=(5, 5))
-    sns.histplot(p_hat, bins=30, kde=True)
-    plt.title(f"Factor {i+1} - p_hat Distribution (High-Exp Cluster)")
-    plt.xlabel("p-hat for nmf-clust spots")
-    plt.ylabel("Count")
-    plt.show()
+    if visualize_each_factor:
+        plt.figure(figsize=(5, 5))
+        sns.histplot(p_hat, bins=30, kde=True)
+        plt.title(f"Factor {i+1} - p_hat Distribution (High-Exp Cluster)")
+        plt.xlabel("p-hat for nmf-clust spots")
+        plt.ylabel("Count")
+        plt.show()
     
-    ### visualize the p_hat distribution for all samples across conditions violin plot
-    df_p_hat = pd.DataFrame({
-        'disease': adata.obs['Condition'][high_cluster_indices],
-        'sample_id': adata.obs['sample_id'][high_cluster_indices],
-        'p_hat': p_hat
-    })
-    plt.figure(figsize=(10, 10))
-    sns.violinplot(y="p_hat", x="disease",  
-                data=df_p_hat, inner="box", palette="Set2")
-    plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.title(f"Factor {i+1} - p_hat Distribution (High-Exp Cluster)")
-    plt.tight_layout()
-    plt.show()
+        ### visualize the p_hat distribution for all samples across conditions violin plot
+        df_p_hat = pd.DataFrame({
+            'disease': adata.obs['Condition'][high_cluster_indices],
+            'sample_id': adata.obs['sample_id'][high_cluster_indices],
+            'p_hat': p_hat
+        })
+        plt.figure(figsize=(10, 10))
+        sns.violinplot(y="p_hat", x="disease",  
+                    data=df_p_hat, inner="box", palette="Set2")
+        plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.title(f"Factor {i+1} - p_hat Distribution (High-Exp Cluster)")
+        plt.tight_layout()
+        plt.show()
 
+    if exception_vis:
+        ### visualize p-hat values on spatial maps for each sample, for non-high-expression cluster points p_hat=NA
+        adata.obs['p_hat'] = pd.NA
+        adata.obs['p_hat'].iloc[high_cluster_indices] = p_hat.astype('float32')
+        #adata.obs['p_hat'] = adata.obs['p_hat'].astype('float32')
+        # Copy adata per sample for plotting
+        sample_ids = adata.obs['sample_id'].unique().tolist()
+        adata_by_sample = {
+            sample_id: adata[adata.obs['sample_id'] == sample_id].copy()
+            for sample_id in sample_ids
+        }
+        # Plot spatial maps for the first 8 samples
+        plot.plot_grid_upgrade(adata_by_sample, sample_ids, key="p_hat", from_obsm=False, 
+        title_prefix=f" Factor {i+1}- " + "p-hat predictions (high-exp cluster)", counter=i+1, 
+        figsize=(43, 20), fontsize=45, dot_size=30) #figsize=(42, 30), fontsize=45
 
-#return all_results
+    
 
 
 # Run factor-wise HiDDEN-like analysis (logistic regression on single factors)
-results = cpred.single_factor_logistic_evaluation_Fclust(
-    adata, factor_key="X_nmf", max_factors=optimal_num_pcs_ks
-)
+#results = cpred.single_factor_logistic_evaluation_Fclust(
+#    adata, factor_key="X_nmf", max_factors=optimal_num_pcs_ks
+#)
 
+results = all_results
 # Extract full model stats for each factor
 coef_list = [res['coef'] for res in results]
 intercept_list = [res['intercept'] for res in results]
@@ -294,72 +327,36 @@ plt.ylabel("Density")
 plt.legend()
 plt.show()
 
-
-factor_id = 1#18
-results[factor_id]['p_hat']  # p_hat for the first factor
-adata.obs['Condition']
-### create a dataframe 
-df_p_hat = pd.DataFrame({
-    'disease': adata.obs['Condition'],
-    'sample_id': adata.obs['sample_id'],
-    'p_hat': results[factor_id]['p_hat']
-
-})
-plt.figure(figsize=(10, 10))
-sns.violinplot(y="p_hat", x="disease",  
-               data=df_p_hat, inner="box", palette="Set2")
-plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.tight_layout()
-plt.show()
-
-
-########################  VISUALIZATION  ######################## #(10,20)
-cropped_status = ['black' if x else  'yellow' for x in adata.obs['cropped'].values]
-for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
-    #plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(16, 10), color_vector=cropped_status) #(18, 6)
-    plot.plot_logit_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 10))
-    plot.plot_p_hat_vs_nmf_by_sample(adata, results, sample_ids, factor_idx=i, figsize=(18, 10), 
-                                     color_vector=cropped_status) #(18, 6)
-
-################################################
-################### Importing results from pickle and Anndata ##################
-################################################
-# Save
-#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin.pkl'
-#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped.pkl'
-#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
-#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
-#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
-#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18_K10.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t7.pkl'
-with open(results_path, 'wb') as f:
-    pickle.dump(results, f)
-
-
-with open(results_path, 'rb') as f:
-    results = pickle.load(f)
-#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
-#adata = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad')
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
 
+### we have 0-110088 indices and a subset of them are used for each factor high-expression cluster
+## extract the indices for each factor, and count how many times each index is used across all factors
+index_usage = np.zeros(adata.n_obs, dtype=int)
+for res in results:
+    high_cluster_indices = res['high_cluster_indices']
+    index_usage[high_cluster_indices] += 1  
+print("Index usage counts across all factors:")
+print(index_usage) ## length = total number of spots (110088)
+
+### make a histogram of index usage, use counts not density
+plt.figure(figsize=(10, 6))
+sns.histplot(index_usage, bins=30, kde=False, color='green', stat='count')
+plt.title("Histogram of Spot Index Usage Across All Factors")
+plt.xlabel("Number of Factors Using Spot Index")
+plt.ylabel("Count of Spot Indices")
+plt.legend()
+plt.show()
+
 
 ################################################
-### cropped indices
-GOF_index = [1, 14, 12, 22, 26, 0]
-LOF_index = [2, 6, 13]
-
-#### uncropped indices
-GOF_index = [24, 20, 3, 2, 27, 17, 13, 9]
-LOF_index = [11, 7, 23, 26, 29, 6, 12, 22]
-
-#### uncropped - sample-wise norm indices
-GOF_index = [0, 2, 5, 12, 6]
-LOF_index = [16, 8, 29, 13]
-
-#### uncropped - t3_7 indices
+#### uncropped - t3_7 indices 
 GOF_index = [21, 1, 9, 22, 24]
 LOF_index = [0, 27, 12, 5, 19]
+#### uncropped - t3_7 indices - Fclust analysis
+GOF_index = [9, 21, 14, 18, 11, 6, 2, 5]
+LOF_index = [0] #27, 22, 17, 12  all have higehr than 0.05 p-values
+
 
 #### uncropped - t18 indices
 GOF_index = [18, 12, 9, 20, 14]
