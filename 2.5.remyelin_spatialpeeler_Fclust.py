@@ -173,7 +173,7 @@ t18_lof = [3, 6, 19]
 t7_gof = [0, 12, 20, 2]
 t7_lof = [10, 18, 7]
 
-for i in t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 6, 19, 
+for i in range(max_factors):#t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 6, 19, 
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)

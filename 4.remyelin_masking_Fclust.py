@@ -27,8 +27,6 @@ np.random.seed(RAND_SEED)
 CASE_COND_NAME = 'LPC'
 
 
-
-
 results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7.pkl'
 
 # Load
@@ -36,8 +34,8 @@ with open(results_filename, 'rb') as f:
     results = pickle.load(f)
 
 
-#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
-outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 adata = sc.read_h5ad(outp)
 
 adata.obs['binary_label'] = adata.obs['Condition'].apply(lambda x: 1 if x == 'LPC' else 0)
@@ -46,7 +44,7 @@ sample_ids = adata.obs['sample_id'].unique().tolist()
 
 
 cluster_mask_dict = {}
-factor_idx = GOF_index[1]
+factor_idx = 0
 print(f"Factor {factor_idx+1}")
 
 
@@ -58,11 +56,24 @@ def get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1):
         return sig_de.shape[0]
 
 
-for factor_idx in GOF_index:
+t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
+t18_gof = [9, 2, 12, 18]
+t18_lof = [3, 6, 19]
+t7_gof = [0, 12, 20, 2]
+t7_lof = [10, 18, 7]
+
+factor_idx = t3_7_gof[0]
+
+for factor_idx in t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print(f"Factor {factor_idx+1}")
     result = results[factor_idx]
     p_hat_factor = result['p_hat']
-    p_hat_factor_case = p_hat_factor[adata.obs['Condition'] == CASE_COND_NAME]
+    high_cluster_indices = result['high_cluster_indices']
+
+    
+    adata_sub = adata[high_cluster_indices].copy()
+
+    p_hat_factor_case = p_hat_factor[adata_sub.obs['Condition'] == CASE_COND_NAME]
     p_hat_factor_case_df = pd.DataFrame(p_hat_factor_case, columns=['p_hat'])
     
     plt.figure(figsize=(5, 5))
@@ -76,7 +87,8 @@ for factor_idx in GOF_index:
     kmeans.fit(p_hat_factor_case.reshape(-1, 1))
 
     ### add cluster information to adata - to the case observations with the correct order
-    mask_case = (adata.obs['Condition'].values == CASE_COND_NAME)
+    mask_case = (adata_sub.obs['Condition'].values == CASE_COND_NAME)
+    
 
     # Sanity check: lengths must match
     print(mask_case.sum() == len(kmeans.labels_))
@@ -95,22 +107,21 @@ for factor_idx in GOF_index:
     # Create an obs column name that encodes which factor you clustered (here factor 7)
     obs_col = 'phat_cluster_factor' + str(factor_idx+1)
     ### score the p-hat values for all cells
-    adata.obs['phat_factor'+str(factor_idx+1)] = result['p_hat']
+    adata_sub.obs['phat_factor'+str(factor_idx+1)] = result['p_hat']
 
     # Initialize with NaN for all, then fill case rows in-place to preserve order
-    adata.obs[obs_col] = np.nan
-    adata.obs.loc[mask_case, obs_col] = labels_remapped
+    adata_sub.obs[obs_col] = np.nan
+    adata_sub.obs.loc[mask_case, obs_col] = labels_remapped
 
     # make it categorical and store centers for reference
-    adata.obs[obs_col] = pd.Categorical(adata.obs[obs_col], categories=[0, 1])
+    adata_sub.obs[obs_col] = pd.Categorical(adata_sub.obs[obs_col], categories=[0, 1])
     ### convert to string
-    adata.obs[obs_col] = adata.obs[obs_col].astype(str)
+    adata_sub.obs[obs_col] = adata_sub.obs[obs_col].astype(str)
     ## add 'case' to the obs_col values
-    adata.obs[obs_col] = adata.obs[obs_col].apply(lambda x: x if pd.isna(x) else 'case_' + str(x))
-
+    adata_sub.obs[obs_col] = adata_sub.obs[obs_col].apply(lambda x: x if pd.isna(x) else 'case_' + str(x))
     ### visualize p-hat scores over cluster 0 and 1 as violin plot
     plt.figure(figsize=(6, 5))
-    sns.violinplot(x=obs_col, y='phat_factor'+str(factor_idx+1), data=adata.obs)
+    sns.violinplot(x=obs_col, y='phat_factor'+str(factor_idx+1), data=adata_sub.obs)
     plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})")
     plt.axhline(y=threshold, color='r', linestyle='--')
     plt.xlabel("Cluster")
@@ -128,20 +139,20 @@ for factor_idx in GOF_index:
                 return 'control_0'
 
 
-    adata.obs[obs_col] = adata.obs.apply(assign_control_label, axis=1)
+    adata_sub.obs[obs_col] = adata_sub.obs.apply(assign_control_label, axis=1)
     
     ## check if the obs_col values are string
-    print(adata.obs[obs_col].dtype)
-    cluster_mask_dict[obs_col] = adata.obs[obs_col]
+    print(adata_sub.obs[obs_col].dtype)
+    cluster_mask_dict[obs_col] = adata_sub.obs[obs_col]
     ### make it categorical
-    adata.obs[obs_col] = pd.Categorical(adata.obs[obs_col], categories=['control_0', 'control_1', 'case_0', 'case_1'])
-    adata.obs[obs_col] = adata.obs[obs_col].astype(str)
+    adata_sub.obs[obs_col] = pd.Categorical(adata_sub.obs[obs_col], categories=['control_0', 'control_1', 'case_0', 'case_1'])
+    adata_sub.obs[obs_col] = adata_sub.obs[obs_col].astype(str)
     ## check the stats of each cluster
-    print(adata.obs[obs_col].value_counts())
+    print(adata_sub.obs[obs_col].value_counts())
 
     ### visualize p-hat scores over cluster 0 and 1 as violin plot
     plt.figure(figsize=(8, 5))
-    sns.violinplot(x=obs_col, y='phat_factor'+str(factor_idx+1), data=adata.obs)
+    sns.violinplot(x=obs_col, y='phat_factor'+str(factor_idx+1), data=adata_sub.obs)
     plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})")
     plt.axhline(y=threshold, color='r', linestyle='--')
     plt.xlabel("Cluster")
@@ -153,11 +164,11 @@ for factor_idx in GOF_index:
     num_sig_DE = {}
     ###############################################################################
     ### perform DE between case 0 and 1
-    case_1_mask = (adata.obs[obs_col] == 'case_1').values
-    case_0_mask = (adata.obs[obs_col] == 'case_0').values
+    case_1_mask = (adata_sub.obs[obs_col] == 'case_1').values
+    case_0_mask = (adata_sub.obs[obs_col] == 'case_0').values
     # Subset to the two clusters
     keep = case_1_mask | case_0_mask
-    ad = adata[keep].copy()
+    ad = adata_sub[keep].copy()
     # Temporary 2-level group label
     grp_col = "_tmp_de_group"
     ad.obs[grp_col] = pd.Categorical(
@@ -186,12 +197,12 @@ for factor_idx in GOF_index:
 
     ###############################################################################
     ### perform DE between cluster-1 and control+cluster-0 
-    case_1_mask = (adata.obs[obs_col] == 'case_1').values
-    case_0_mask = (adata.obs[obs_col] == 'case_0').values
-    control_mask = (adata.obs['Condition'].values != CASE_COND_NAME)
+    case_1_mask = (adata_sub.obs[obs_col] == 'case_1').values
+    case_0_mask = (adata_sub.obs[obs_col] == 'case_0').values
+    control_mask = (adata_sub.obs['Condition'].values != CASE_COND_NAME)
     # Subset to the two clusters + control
     keep = case_1_mask | case_0_mask | control_mask
-    ad = adata[keep].copy()
+    ad = adata_sub[keep].copy()
     # Temporary 2-level group label
     grp_col = "_tmp_de_group"
     ad.obs[grp_col] = pd.Categorical(
@@ -220,11 +231,11 @@ for factor_idx in GOF_index:
 
     ###############################################################################
     ### perform DE between cluster-1 and control_1
-    case_1_mask = (adata.obs[obs_col] == 'case_1').values
-    control_1_mask = (adata.obs[obs_col] == 'control_1').values
+    case_1_mask = (adata_sub.obs[obs_col] == 'case_1').values
+    control_1_mask = (adata_sub.obs[obs_col] == 'control_1').values
     # Subset to the two clusters
     keep = case_1_mask | control_1_mask
-    ad = adata[keep].copy()
+    ad = adata_sub[keep].copy()
     # Temporary 2-level group label
     grp_col = "_tmp_de_group"
     ad.obs[grp_col] = pd.Categorical(
@@ -254,11 +265,11 @@ for factor_idx in GOF_index:
 
     ###############################################################################
     ### perform DE between case-0 and all control
-    case_0_mask = (adata.obs[obs_col] == 'case_0').values
-    control_mask = (adata.obs['Condition'].values != CASE_COND_NAME)
+    case_0_mask = (adata_sub.obs[obs_col] == 'case_0').values
+    control_mask = (adata_sub.obs['Condition'].values != CASE_COND_NAME)
     # Subset to the two clusters + control
     keep = case_0_mask | control_mask
-    ad = adata[keep].copy()
+    ad = adata_sub[keep].copy()
     # Temporary 2-level group label
     grp_col = "_tmp_de_group"
     ad.obs[grp_col] = pd.Categorical(
@@ -288,11 +299,11 @@ for factor_idx in GOF_index:
 
     ###############################################################################
     ### perform DE between case-0 and all control_0
-    case_0_mask = (adata.obs[obs_col] == 'case_0').values
-    control_0_mask = (adata.obs[obs_col] == 'control_0').values
+    case_0_mask = (adata_sub.obs[obs_col] == 'case_0').values
+    control_0_mask = (adata_sub.obs[obs_col] == 'control_0').values
     # Subset to the two clusters + control
     keep = case_0_mask | control_0_mask
-    ad = adata[keep].copy()
+    ad = adata_sub[keep].copy()
     # Temporary 2-level group label
     grp_col = "_tmp_de_group"
     ad.obs[grp_col] = pd.Categorical(
@@ -333,10 +344,10 @@ for factor_idx in GOF_index:
     # Map string labels to numeric codes (ensure no NaNs remain)
     code_map = {'control_0': 0, 'control_1': 1, 'case_0': 2, 'case_1': 3}
     obs_col_num = obs_col + "_num"
-    adata.obs[obs_col_num] = adata.obs[obs_col].map(code_map).astype(float)
+    adata_sub.obs[obs_col_num] = adata_sub.obs[obs_col].map(code_map).astype(float)
     # Sanity check: if you see NaN here, some labels didn't match code_map exactly
-    print("Unique numeric codes:", adata.obs[obs_col_num].unique())
-    assert not pd.isna(adata.obs[obs_col_num]).any(), "Unmapped labels → extend code_map."
+    print("Unique numeric codes:", adata_sub.obs[obs_col_num].unique())
+    assert not pd.isna(adata_sub.obs[obs_col_num]).any(), "Unmapped labels → extend code_map."
     # Numeric palette (keys must match the codes you just wrote)
     palette_num = {
         0: "#54A24B",  # control_0
@@ -346,9 +357,9 @@ for factor_idx in GOF_index:
     }   
     ###############################################################################
 
-    sample_ids = adata.obs['sample_id'].unique().tolist()
+    sample_ids = adata_sub.obs['sample_id'].unique().tolist()
     adata_by_sample = {
-        sample_id: adata[adata.obs['sample_id'] == sample_id].copy()
+        sample_id: adata_sub[adata_sub.obs['sample_id'] == sample_id].copy()
         for sample_id in sample_ids
     }
 
@@ -356,7 +367,7 @@ for factor_idx in GOF_index:
         adata_by_sample, sample_ids, key=obs_col_num,
         title_prefix=f"Clusters (factor {factor_idx+1})",
         from_obsm=False, discrete=True,
-        dot_size=2, figsize=(25, 10),
+        dot_size=7, figsize=(25, 10),
         palette=palette_num
     )
 
