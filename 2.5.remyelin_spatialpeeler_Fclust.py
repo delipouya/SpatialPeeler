@@ -1,6 +1,5 @@
 import os
 import sys
-
 from sklearn.cluster import KMeans
 root_path = os.path.abspath('./..')
 sys.path.insert(0, root_path)
@@ -23,6 +22,8 @@ from SpatialPeeler import case_prediction as cpred
 from SpatialPeeler import plotting as plot
 from SpatialPeeler import gene_identification as gid
 
+import statsmodels.api as sm
+from scipy.special import logit
 import pickle
 
 RAND_SEED = 28
@@ -31,7 +32,9 @@ np.random.seed(RAND_SEED)
 
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
+
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
@@ -135,8 +138,6 @@ adata.obs['binary_label'] = adata.obs['Condition'].apply(lambda x: 1 if x == 'LP
 adata.obs['status'] = adata.obs['binary_label'].astype(int).values
 
 
-import statsmodels.api as sm
-from scipy.special import logit
 
 def standalone_logistic(X, y):
     # Add intercept explicitly
@@ -156,38 +157,33 @@ def standalone_logistic(X, y):
 
 
 
-visualize_each_factor = False
-exception_vis = False
 #def single_factor_logistic_evaluation_Fclust(adata, factor_key="X_nmf", max_factors=30):
 factor_key = "X_nmf"
 max_factors = 30
 all_results = []
 X = adata.obsm[factor_key]
-y = adata.obs["status"].values
+y = adata.obs["Condition"].values
 sample_ids = adata.obs["sample_id"].values
 i = 9
 
 t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
+t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
+
 t18_gof = [9, 2, 12, 18]
 t18_lof = [3, 6, 19]
 t7_gof = [0, 12, 20, 2]
 t7_lof = [10, 18, 7]
 
-for i in range(max_factors):#t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 6, 19, 
+
+visualize_each_factor = True
+exception_vis = True
+
+for i in t3_7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)
     #print(Xi.min(), Xi.max())
 
-    if visualize_each_factor:
-        ### cluster the Xi into 2 clusters 
-        plt.figure(figsize=(5, 5))
-        sns.histplot(Xi, bins=30, kde=True)
-        plt.title(f"Factor {i+1}")
-        plt.xlabel("Factor scores for all spots")
-        plt.ylabel("Count")
-        plt.show()
-    
     kmeans = KMeans(n_clusters=2, random_state=RAND_SEED)
     kmeans.fit(Xi.reshape(-1, 1))
     centers = kmeans.cluster_centers_.ravel()
@@ -225,19 +221,43 @@ for i in range(max_factors):#t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 
     y_high = y[high_cluster_indices]
     print(f"Using {len(high_cluster_indices)} samples from high-expression cluster for logistic regression")
 
+    if visualize_each_factor:
+        ### cluster the Xi into 2 clusters 
+        plt.figure(figsize=(5, 5))
+        sns.histplot(Xi, bins=30, kde=True)
+        ### add vertical line for threshold
+        plt.axvline(x=threshold, color='red', linestyle='--', label='Threshold')
+        plt.legend()
+        plt.title(f"Factor {i+1}")
+        plt.xlabel("Factor scores for all spots")
+        plt.ylabel("Count")
+        plt.show()
+    
     ########################### VISUALIZATION ########################
     ## add the factor clustering results to adata object and vidualize all spatial samples
     adata.obs[f'Factor_{i+1}_cluster'] = labels_remapped
+    adata.obs[f'Factor_{i+1}_score'] = Xi.astype('float32')
+
+
     sample_ids = adata.obs['sample_id'].unique().tolist()
     adata_by_sample = {
         sample_id: adata[adata.obs['sample_id'] == sample_id].copy()
         for sample_id in sample_ids
     }
     if visualize_each_factor:
-        plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_cluster', 
+        #plot.
+        plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_cluster', 
                title_prefix=f"Factor {i+1} Clusters", 
                from_obsm=False, figsize=(43, 30), fontsize=45,
-                dot_size=50) #figsize=(42, 30), fontsize=45 
+                dot_size=60, palette_continuous='viridis_r') #figsize=(42, 30), fontsize=45 
+
+        ### visualize the factor scores on spatial maps for each sample
+        adata.obs[f'Factor_{i+1}_score'] = Xi.astype('float32')
+        #plot.
+        plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_score', 
+               title_prefix=f" Factor {i+1} Scores", 
+               from_obsm=False, figsize=(43, 30), fontsize=45,
+                dot_size=60, palette_continuous='viridis_r') #figsize=(42, 30), fontsize=45
     #################################################################
 
     # Logistic regression with full inference
@@ -280,33 +300,63 @@ for i in range(max_factors):#t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 
             'p_hat': p_hat
         })
 
+
         plt.figure(figsize=(10, 10))
+        # Violin plot
         sns.violinplot(
             y="p_hat",
             x="disease",
             data=df_p_hat,
             inner="box",
-            order=["Saline", "LPC"],                     # ensure left→right order
-            palette={"Saline": "skyblue", "LPC": "salmon"}    # enforce specific colors
+            cut=0,
+            density_norm="count",
+            order=["Saline", "LPC"],
+            palette={"Saline": "skyblue", "LPC": "salmon"}
+        )
+
+        # Swarm plot (data points)
+        sns.swarmplot(
+            y="p_hat",
+            x="disease",
+            data=df_p_hat,
+            order=["Saline", "LPC"],
+            color="k",
+            size=3,
+            alpha=0.5,
+            zorder=3
         )
         plt.title(f"Factor {i+1} - p_hat Distribution (High-Exp Cluster)")
         plt.tight_layout()
         plt.show()
 
+
         plt.figure(figsize=(15, 10))
+        # Violin plot
         sns.violinplot(
             y="p_hat",
             x="sample_id",
             data=df_p_hat,
             inner="box",
-            order=saline_samples + lpc_samples,                     # ensure left→right order
-            # salines as green, lpcs as orange
-            palette={sid: "skyblue" for sid in saline_samples} | {sid: "salmon" for sid in lpc_samples}
+            density_norm="count",
+            cut=0,
+            order=saline_samples + lpc_samples,
+            palette={sid: "skyblue" for sid in saline_samples}
+                    | {sid: "salmon" for sid in lpc_samples}
+        )
+        # Swarm plot (data points)
+        sns.swarmplot(
+            y="p_hat",
+            x="sample_id",
+            data=df_p_hat,
+            order=saline_samples + lpc_samples,
+            color="k",
+            size=5,
+            alpha=0.5,
+            zorder=3
         )
         plt.title(f"Factor {i+1} - p_hat Distribution (High-Exp Cluster)")
         plt.tight_layout()
         plt.show()
-
 
 
     if exception_vis:
@@ -323,11 +373,11 @@ for i in range(max_factors):#t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 
         # Plot spatial maps for the first 8 samples
         plot.plot_grid_upgrade(adata_by_sample, sample_ids, key="p_hat", from_obsm=False, 
         title_prefix=f" Factor {i+1}- " + "p-hat predictions (high-exp cluster)", counter=i+1, 
-        figsize=(43, 20), fontsize=45, dot_size=30) #figsize=(42, 30), fontsize=45
+        figsize=(43, 20), fontsize=45, dot_size=60) #figsize=(42, 30), fontsize=45
 
     
 results = all_results
-results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7.pkl'
+results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
 
 ### save the results using pickle
 with open(results_filename, 'wb') as f:
@@ -335,7 +385,7 @@ with open(results_filename, 'wb') as f:
 
 # Load
 with open(results_filename, 'rb') as f:
-    results2 = pickle.load(f)
+    results = pickle.load(f)
 
 # Extract full model stats for each factor
 coef_list = [res['coef'] for res in results]
@@ -390,62 +440,157 @@ plt.legend()
 plt.show()
 
 
-factor_index = 19  # Change this to the desired factor index (0-based)
-adata_sub = adata[results[factor_index]['high_cluster_indices'], :].copy()
-print(adata_sub.shape)
-adata_sub.obs['p_hat'] = results[factor_index]['p_hat'].astype('float32')
-adata_sub.obs['1_p_hat'] = 1 - adata_sub.obs['p_hat'].astype('float32')
-adata_sub_by_sample = {
-    sid: adata_sub[adata_sub.obs['sample_id'] == sid].copy()
-    for sid in adata_sub.obs['sample_id'].unique()
-}
-sample_ids = list(adata_sub_by_sample.keys())
-PATTERN_COND = 'LOF'#'GOF'
-#0:10 are diseased samples, 11:14 are normal samples 
-sample_id_to_check = 1#1#12#6
-an_adata_sample = adata_sub_by_sample[sample_ids[sample_id_to_check]]
-expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
-p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
+factor_index = 0  # Change this to the desired factor index (0-based)
+PATTERN_COND = 'GOF'#'GOF'
+sample_id_to_check = 2#1#12#6
 
-neg_p_hat_vector = an_adata_sample.obs['1_p_hat']  # shape: (n_spots,)
-pattern_vector = p_hat_vector if PATTERN_COND == 'GOF' else neg_p_hat_vector
+t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
 
-#### removing genes with zero variance
-print(np.all(np.isfinite(expr_matrix)))
-gene_zero_std_index = np.std(expr_matrix, axis=0) == 0
-print(expr_matrix.shape)
-expr_matrix_sub = expr_matrix[:, ~gene_zero_std_index]  # Exclude genes with zero variance
-print(expr_matrix_sub.shape)
-print(np.var(expr_matrix[:, gene_zero_std_index], axis=0)  )
-print(np.var(expr_matrix_sub, axis=0)  )
-
-gene_names = an_adata_sample.var_names[~gene_zero_std_index]
-
-pearson_corr = gid.pearson_correlation_with_pattern(expr_matrix_sub, pattern_vector, 
-                                                     gene_names=gene_names)
-symbols= pearson_corr['gene'].map(hlps.map_ensembl_to_symbol(pearson_corr['gene'].tolist(), species='mouse'))
-pearson_corr['symbols'] = symbols
-
-### sort the pearson correlation dataframe
-pearson_corr.sort_values("correlation", ascending=False, inplace=True)
-print(pearson_corr.head(30))
+t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
+t18_gof = [9, 2, 12, 18]
+t18_lof = [3, 6, 19]
+t7_gof = [0, 12, 20, 2]
+t7_lof = [10, 18, 7]
 
 
+for factor_index in t3_7_gof_v2:
+    adata_sub = adata[results[factor_index]['high_cluster_indices'], :].copy()
+    print(adata_sub.shape)
+    adata_sub.obs['p_hat'] = results[factor_index]['p_hat'].astype('float32')
+    adata_sub.obs['1_p_hat'] = 1 - adata_sub.obs['p_hat'].astype('float32')
+    adata_sub_by_sample = {
+        sid: adata_sub[adata_sub.obs['sample_id'] == sid].copy()
+        for sid in adata_sub.obs['sample_id'].unique()
+    }
+    sample_ids = list(adata_sub_by_sample.keys())
+    
+    #0:10 are diseased samples, 11:14 are normal samples 
+    
+    an_adata_sample = adata_sub_by_sample[sample_ids[sample_id_to_check]]
+    expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
+    p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
+
+    neg_p_hat_vector = an_adata_sample.obs['1_p_hat']  # shape: (n_spots,)
+    pattern_vector = p_hat_vector if PATTERN_COND == 'GOF' else neg_p_hat_vector
+
+    #### removing genes with zero variance
+    print(np.all(np.isfinite(expr_matrix)))
+    gene_zero_std_index = np.std(expr_matrix, axis=0) == 0
+    print(expr_matrix.shape)
+    expr_matrix_sub = expr_matrix[:, ~gene_zero_std_index]  # Exclude genes with zero variance
+    print(expr_matrix_sub.shape)
+    print(np.var(expr_matrix[:, gene_zero_std_index], axis=0)  )
+    print(np.var(expr_matrix_sub, axis=0)  )
+
+    gene_names = an_adata_sample.var_names[~gene_zero_std_index]
+    pearson_corr = gid.pearson_correlation_with_pattern(expr_matrix_sub, pattern_vector, 
+                                                        gene_names=gene_names)
+    symbols= pearson_corr['gene'].map(hlps.map_ensembl_to_symbol(pearson_corr['gene'].tolist(), species='mouse'))
+    pearson_corr['symbols'] = symbols
+    ### sort the pearson correlation dataframe
+    pearson_corr.sort_values("correlation", ascending=False, inplace=True)
+    print(pearson_corr.head(30))
+
+
+    #NMF_idx_values = an_adata_sample.obsm["X_nmf"][:,factor_index]
+    ### NMF gene df
+    NMF_gene_df = pd.DataFrame({
+        "gene": an_adata_sample.var_names,
+        #"NMF_loading": an_adata_sample.uns['nmf_components'][factor_index,:]
+        "NMF_loading": an_adata_sample.uns['nmf']['H'][factor_index,:]
+    })
+
+    #### merge the NMF_gene_df with pearson_corr based on gene column
+    merged_df_genescores = pd.merge(pearson_corr, NMF_gene_df, on="gene", how="inner")
+    ### plot NMF_loading vs correlation scatter plot
+    plt.figure(figsize=(10, 6))
+    plt.scatter(merged_df_genescores['NMF_loading'], merged_df_genescores['correlation'])
+    plt.xlabel('NMF Loading')
+    plt.ylabel('Pearson Correlation')
+    plt.title('Factor ' + str(factor_index+1) + ': NMF Loading vs Pearson Correlation')
+    plt.show()
+    
+
+    from adjustText import adjust_text
+    plt.figure(figsize=(10, 6))
+    plt.scatter(
+        merged_df_genescores['NMF_loading'],
+        merged_df_genescores['correlation'],
+        alpha=0.7, edgecolor='k'
+    )
+    # Select top 5 genes based on NMF_loading
+    top5_cor = merged_df_genescores.nlargest(5, "correlation")
+    top5_nmf = merged_df_genescores.nlargest(5, "NMF_loading")
+    top5 = pd.concat([top5_cor, top5_nmf]).drop_duplicates().reset_index(drop=True)
+    # Highlight top 5
+    plt.scatter(top5['NMF_loading'], top5['correlation'], color='red', s=90)
+    texts = []
+    for _, row in top5.iterrows():
+        texts.append(
+            plt.text(
+                row['NMF_loading'], row['correlation'],
+                row['symbols'],
+                fontsize=16, weight='bold'
+            )
+        )
+    # Automatically adjust label positions to avoid overlaps
+    adjust_text(
+        texts,
+        expand_points=(2, 2),   # push away from points
+        arrowprops=dict(arrowstyle='-', lw=1, color='black', alpha=0.6)
+    )
+    plt.xlabel('NMF Loading', fontsize=16)
+    plt.ylabel('Pearson Correlation', fontsize=16)
+    plt.title(f'Factor {factor_index+1}: NMF Loading vs Pearson Correlation', fontsize=18)
+    plt.tight_layout()
+    plt.show()
 
 
 
-NMF_idx_values = an_adata_sample.obsm["X_nmf"][:,factor_index]
+    plt.figure(figsize=(10, 6))
+    plt.scatter(
+        merged_df_genescores['NMF_loading'],
+        merged_df_genescores['correlation'],
+        alpha=0.7, edgecolor='k'
+    )
+    # Select top 5 genes based on NMF_loading
+    top5 = merged_df_genescores.nlargest(5, "correlation")
+    # Highlight top 5
+    plt.scatter(top5['NMF_loading'], top5['correlation'], color='red', s=90)
+    texts = []
+    for _, row in top5.iterrows():
+        texts.append(
+            plt.text(
+                row['NMF_loading'], row['correlation'],
+                row['symbols'],
+                fontsize=16, weight='bold'
+            )
+        )
+    # Automatically adjust label positions to avoid overlaps
+    adjust_text(
+        texts,
+        expand_points=(2, 2),   # push away from points
+        arrowprops=dict(arrowstyle='-', lw=1, color='black', alpha=0.6)
+    )
+    plt.xscale("log")  # compress extreme loadings
+    plt.xlabel('NMF Loading', fontsize=16)
+    plt.ylabel('Pearson Correlation', fontsize=16)
+    plt.title(f'Factor {factor_index+1}: NMF Loading vs Pearson Correlation', fontsize=18)
+    plt.tight_layout()
+    plt.show()
+
+    
 
 
+
+'''
 regression_res = gid.regression_with_pattern(expr_matrix_sub, pattern_vector,
                                                gene_names=gene_names, 
                                                scale=True)
 regression_corr = pd.DataFrame({
         "gene": regression_res["gene"],
         "correlation": regression_res["slope"]})
-
 regression_corr.sort_values("correlation", ascending=False, inplace=True)
-
 
 ### make a histogram of the regression coefficients
 plt.figure(figsize=(10, 6))
@@ -461,5 +606,6 @@ corr_dict = {
     "Pearson": pearson_corr,
     "Regression": regression_corr,
 }
+'''
 
 

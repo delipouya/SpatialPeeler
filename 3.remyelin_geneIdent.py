@@ -37,7 +37,8 @@ vis.visual_settings()
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_SampleWiseNorm.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t7.pkl'
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t7.pkl'
+results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
 
 with open(results_path, 'rb') as f:
     results = pickle.load(f)

@@ -119,11 +119,16 @@ for factor_idx in t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     adata_sub.obs[obs_col] = adata_sub.obs[obs_col].astype(str)
     ## add 'case' to the obs_col values
     adata_sub.obs[obs_col] = adata_sub.obs[obs_col].apply(lambda x: x if pd.isna(x) else 'case_' + str(x))
+    ## replace case_nan with control
+    adata_sub.obs[obs_col] = adata_sub.obs[obs_col].replace('case_nan', 'control')
     ### visualize p-hat scores over cluster 0 and 1 as violin plot
     plt.figure(figsize=(6, 5))
-    sns.violinplot(x=obs_col, y='phat_factor'+str(factor_idx+1), data=adata_sub.obs)
+    sns.violinplot(x=obs_col, y='phat_factor'+str(factor_idx+1), 
+                   data=adata_sub.obs,
+                   order=['control','case_0', 'case_1'])
     plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})")
     plt.axhline(y=threshold, color='r', linestyle='--')
+    
     plt.xlabel("Cluster")
     plt.ylabel("p-hat")
     plt.show()
@@ -152,7 +157,9 @@ for factor_idx in t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
 
     ### visualize p-hat scores over cluster 0 and 1 as violin plot
     plt.figure(figsize=(8, 5))
-    sns.violinplot(x=obs_col, y='phat_factor'+str(factor_idx+1), data=adata_sub.obs)
+    sns.violinplot(x=obs_col, y='phat_factor'+str(factor_idx+1), 
+                   data=adata_sub.obs,
+                   order=['control_0', 'control_1', 'case_0', 'case_1'])
     plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})")
     plt.axhline(y=threshold, color='r', linestyle='--')
     plt.xlabel("Cluster")
@@ -258,7 +265,10 @@ for factor_idx in t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     # score column: Z-statistic (standardized Wilcoxon rank-sum score) computed for each gene after comparing expression ranks between groups.    
     gene_names = hlps.map_ensembl_to_symbol(de_results.gene.tolist(), species='mouse')
     de_results['gene_name'] = de_results['gene'].map(gene_names)
+    print('-----------------------------------')
+    print('Case1 vs Control1')
     print(de_results.head(20))  
+    print('-----------------------------------')
     num_sig_DE['case1_vs_control1'] = get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1)
     print(f"Number of significant DE genes (case1 vs control1): {num_sig_DE['case1_vs_control1']}")
 

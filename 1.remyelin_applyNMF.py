@@ -61,34 +61,34 @@ metadata_df = metadata_df[~duplicate_rows_mask]
 #sample_id_Saline_t18_12_7 = metadata_df[Saline_t18_12_7_mask]['sample_id'].values.tolist()
 #sample_id_merged = sample_id_LPC_t18 + sample_id_Saline_t18_12_7
 
-#LPC_t3_mask = (metadata_df['Timepoint'] == 3) & (metadata_df['Condition'] == 'LPC')
-#sample_id_LPC_t3 = metadata_df[LPC_t3_mask]['sample_id'].values.tolist()
-#Saline_t3_7_mask = (metadata_df['Timepoint'].isin([3,7])) & (metadata_df['Condition'] == 'Saline')
-#sample_id_Saline_t3_7 = metadata_df[Saline_t3_7_mask]['sample_id'].values.tolist()
-#sample_id_merged = sample_id_LPC_t3 + sample_id_Saline_t3_7
-
-
-LPC_t7_mask = (metadata_df['Timepoint'] == 7) & (metadata_df['Condition'] == 'LPC')
-sample_id_LPC_t7 = metadata_df[LPC_t7_mask]['sample_id'].values.tolist()
+LPC_t3_mask = (metadata_df['Timepoint'] == 3) & (metadata_df['Condition'] == 'LPC')
+sample_id_LPC_t3 = metadata_df[LPC_t3_mask]['sample_id'].values.tolist()
 Saline_t3_7_mask = (metadata_df['Timepoint'].isin([3,7])) & (metadata_df['Condition'] == 'Saline')
 sample_id_Saline_t3_7 = metadata_df[Saline_t3_7_mask]['sample_id'].values.tolist()
-sample_id_merged = sample_id_LPC_t7 + sample_id_Saline_t3_7
+sample_id_merged = sample_id_LPC_t3 + sample_id_Saline_t3_7
+
+
+#LPC_t7_mask = (metadata_df['Timepoint'] == 7) & (metadata_df['Condition'] == 'LPC')
+#sample_id_LPC_t7 = metadata_df[LPC_t7_mask]['sample_id'].values.tolist()
+#Saline_t3_7_mask = (metadata_df['Timepoint'].isin([3,7])) & (metadata_df['Condition'] == 'Saline')
+#sample_id_Saline_t3_7 = metadata_df[Saline_t3_7_mask]['sample_id'].values.tolist()
+#sample_id_merged = sample_id_LPC_t7 + sample_id_Saline_t3_7
 
 
 print(metadata_df[metadata_df['sample_id'].isin(sample_id_merged)])
 print(metadata_df.head())
 print(metadata_df.shape)
 
-adata_merged = imp.load_all_slide_seq_data(root_dir, normalize_log1p=True) 
+adata_merged = imp.load_all_slide_seq_data(root_dir, normalize_log1p=False)
 adata_merged = adata_merged[adata_merged.obs['puck_id'].isin(sample_id_merged)]
 adata_merged.obs['puck_id'].value_counts()
 #adata_merged.X = adata_merged.layers['lognorm'].copy() # Use preprocessed layer (no additional log1p needed)
-sc.pp.highly_variable_genes(adata_merged, n_top_genes=2000, subset=True)
+#sc.pp.highly_variable_genes(adata_merged, n_top_genes=2000, subset=True)
 
 
 ### add medata to adata object based on the puck_id column
 adata_merged.obs = adata_merged.obs.merge(metadata_df, on='puck_id', how='left')
-adata_merged.obs['puck_id'].describe()
+adata_merged.obs['puck_id'].value_counts()
 print(adata_merged.obs.head())
 
 ########################################
@@ -97,19 +97,86 @@ print(adata_merged.obs.head())
 
 ##################################################################
 ################# Importing the cropped data  ####################
-base = "/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/all_final_cropped_pucks_standardpipeline"
-#scaled_counts = io.mmread(f"{base}/all_final_cropped_pucks_standardpipeline_scaled_counts.mtx").tocsr()
-merged_counts = io.mmread(f"{base}/all_final_cropped_pucks_standardpipeline_counts_merged.mtx").tocsr()
-obs_names = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_barcodes.tsv", header=None)[0].values
-var_names = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_features.tsv", header=None)[0].values
-obs = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_metadata.csv", index_col=0)
+import_cropped = False
+if import_cropped:
+    base = "/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/all_final_cropped_pucks_standardpipeline"
+    #scaled_counts = io.mmread(f"{base}/all_final_cropped_pucks_standardpipeline_scaled_counts.mtx").tocsr()
+    merged_counts = io.mmread(f"{base}/all_final_cropped_pucks_standardpipeline_counts_merged.mtx").tocsr()
+    obs_names = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_barcodes.tsv", header=None)[0].values
+    var_names = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_features.tsv", header=None)[0].values
+    obs = pd.read_csv(f"{base}/all_final_cropped_pucks_standardpipeline_metadata.csv", index_col=0)
 
-all(obs.index == obs_names) ### Check if obs.index matches obs_names
-adata_merged = sc.AnnData(X=merged_counts.T, ### X should be(cells x genes)
-                   obs= obs)
-adata_merged.obs_names = obs_names
-adata_merged.var_names = var_names
+    all(obs.index == obs_names) ### Check if obs.index matches obs_names
+    adata_merged = sc.AnnData(X=merged_counts.T, ### X should be(cells x genes)
+                    obs= obs)
+    adata_merged.obs_names = obs_names
+    adata_merged.var_names = var_names
 ##################################################################
+
+
+
+############################################
+# cNMF-style preprocessing (pooled over pucks)
+############################################
+# ---- 0) Ensure we have raw counts to use for cNMF ----
+# cNMF is intended to run on (non-log) counts with gene-wise scaling, not log1p-normalized X.
+# Prefer: counts stored in a layer (common in many pipelines).
+# If your loader stores raw counts somewhere else, point to it here.
+
+if "counts" in adata_merged.layers:
+    X_counts = adata_merged.layers["counts"]
+elif "raw_counts" in adata_merged.layers:
+    X_counts = adata_merged.layers["raw_counts"]
+elif hasattr(adata_merged, "raw") and adata_merged.raw is not None:
+    # Sometimes raw stores log-normalized; only use if you're sure it is counts.
+    X_counts = adata_merged.raw.X
+else:
+    raise ValueError(
+        "Could not find raw counts. cNMF-style preprocessing should use raw counts.\n"
+        "Reload with normalize_log1p=False, or store counts in adata.layers['counts']."
+    )
+
+# Make a working copy that uses counts in .X
+adata_cnmf = adata_merged.copy()
+adata_cnmf.X = X_counts.copy()
+
+# 2) basic gene filtering 
+# Paper: remove genes detected in fewer than ~1/500 cells: min_cells = max(1, n_cells//500)
+min_cells = max(1, adata_cnmf.n_obs // 500)
+sc.pp.filter_genes(adata_cnmf, min_cells=min_cells)
+
+# (remove extremely low-depth spots if needed.
+# Paper used UMI threshold for cells
+### check how many spots have UMI total less than 200
+min_counts = 100
+adata_cnmf.obs['total_counts'] = np.array(adata_cnmf.X.sum(axis=1)).flatten()
+print("Number of spots with total counts < "+str(min_counts)+":", np.sum(adata_cnmf.obs['total_counts'] < min_counts))
+### filter out spots with less than 1000 UMI counts
+sc.pp.filter_cells(adata_cnmf, min_counts=min_counts)  # adjust if you want a hard cutoff
+
+# 3) HVG selection across pooled data, but batch-aware to avoid puck dominance ----
+sc.pp.highly_variable_genes(
+    adata_cnmf,
+    n_top_genes=2000,
+    batch_key="puck_id",     # use puck_id as the "sample" grouping
+    flavor="seurat_v3",
+    subset=True
+)
+
+# 4) unit-variance scaling WITHOUT centering ----
+# Keeps non-negativity (important for NMF) while matching the "variance normalize" idea.
+sc.pp.scale(adata_cnmf, zero_center=False)
+
+# 5) sanity checks for NMF readiness ----
+# Must be non-negative (or at least not heavily negative). If you see negatives, something upstream centered.
+if sp.issparse(adata_cnmf.X):
+    min_val = adata_cnmf.X.min()
+else:
+    min_val = np.min(adata_cnmf.X)
+
+print("cNMF matrix shape (cells/spots x genes):", adata_cnmf.shape)
+print("Min value in cNMF matrix:", float(min_val))
+
 
 ### Apply NMF
 '''
@@ -120,24 +187,31 @@ adata_merged.layers["lognorm"] = adata_merged.X.copy()
 sc.pp.highly_variable_genes(adata_merged, n_top_genes=2000, flavor='seurat_v3', subset=True, layer='lognorm')
 sc.pp.scale(adata_merged, max_value=10, zero_center=True, layer='lognorm')
 '''
-
 # Run NMF
 # Note: NMF requires dense input, so we convert the sparse matrix to dense.
 # You can also use the `init='nndsvda'` option for better initialization
 # and set `max_iter` to a higher value for convergence.
 
-n_factors = 30  
-nmf_model = NMF(n_components=n_factors, init='nndsvda', 
-                random_state=RAND_SEED, max_iter=1000)
-# X must be dense; convert if sparse
-X = adata_merged.X
-if sp.issparse(X): 
-    X = X.toarray()
-W = nmf_model.fit_transform(X)  # cell × factor matrix
-H = nmf_model.components_        # factor × gene matrix
+n_factors = 30
+nmf_model = NMF(
+    n_components=n_factors,
+    init="nndsvda",
+    random_state=RAND_SEED,
+    max_iter=1000,
+    solver="cd",      # default; works well
+)
 
-adata_merged.obsm["X_nmf"] = W
-adata_merged.uns["nmf_components"] = H
+X = adata_cnmf.X  # use the preprocessed matrix (counts -> HVG -> scale no-center)
+W = nmf_model.fit_transform(X)      # (cells/spots x factors)
+H = nmf_model.components_           # (factors x genes)
+
+adata_cnmf.obsm["X_nmf"] = W
+adata_cnmf.uns["nmf"] = {
+    "H": H,
+    "genes": adata_cnmf.var_names.to_list(),
+    "n_factors": n_factors,
+    "model_params": nmf_model.get_params(),
+}
 
 ### save adata object with NMF results  
 # file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
@@ -146,17 +220,17 @@ adata_merged.uns["nmf_components"] = H
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
-
-adata_merged.write_h5ad(file_name)
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
+adata_cnmf.write_h5ad(file_name)
 
 
 
 
 #adata_merged.obs['sample_id'] = adata_merged.obs['orig.ident']
-sample_ids = adata_merged.obs['sample_id'].unique().tolist()
+sample_ids = adata_cnmf.obs['sample_id'].unique().tolist()
 adata_by_sample = {
-    sample_id: adata_merged[adata_merged.obs['sample_id'] == sample_id].copy()
+    sample_id: adata_cnmf[adata_cnmf.obs['sample_id'] == sample_id].copy()
     for sample_id in sample_ids
 }
 
