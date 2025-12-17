@@ -27,14 +27,15 @@ np.random.seed(RAND_SEED)
 CASE_COND_NAME = 'LPC'
 
 
-results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7.pkl'
-
-# Load
+#results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7.pkl'
+results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
 with open(results_filename, 'rb') as f:
     results = pickle.load(f)
 
 
-outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
+
 #outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 adata = sc.read_h5ad(outp)
 
@@ -56,15 +57,17 @@ def get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1):
         return sig_de.shape[0]
 
 
+t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
+
 t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
 t18_gof = [9, 2, 12, 18]
 t18_lof = [3, 6, 19]
 t7_gof = [0, 12, 20, 2]
 t7_lof = [10, 18, 7]
 
-factor_idx = t3_7_gof[0]
+factor_idx = t3_7_gof_v2[0]
 
-for factor_idx in t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
+for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print(f"Factor {factor_idx+1}")
     result = results[factor_idx]
     p_hat_factor = result['p_hat']
@@ -133,6 +136,41 @@ for factor_idx in t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     plt.ylabel("p-hat")
     plt.show()
 
+    # Violin plot (lighter + count-scaled)
+    plt.figure(figsize=(6, 5))
+    sns.violinplot(
+        x=obs_col,
+        y=f'phat_factor{factor_idx+1}',
+        data=adata_sub.obs,
+        order=['control', 'case_0', 'case_1'],
+        inner="box",
+        cut=0,
+        density_norm="count",
+        color="skyblue",
+        alpha=0.4,
+        linewidth=1
+    )
+    # Swarm plot (data points)
+    sns.swarmplot(
+        x=obs_col,
+        y=f'phat_factor{factor_idx+1}',
+        data=adata_sub.obs,
+        order=['control', 'case_0', 'case_1'],
+        color="k",
+        size=3,
+        alpha=0.5,
+        zorder=3
+    )
+
+    plt.axhline(y=threshold, color='r', linestyle='--')
+    plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})", fontsize=19)
+    plt.xlabel("Cluster", fontsize=18)
+    plt.ylabel("p-hat", fontsize=18)
+    plt.xticks(fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.tight_layout()
+    plt.show()
+
     ### split the obs_col values equal to 'case_nan' into 'control_0' and 'control_1' based on the threshold derived from case samples
     def assign_control_label(row):
         if row[obs_col].startswith('case_0') or row[obs_col].startswith('case_1'):
@@ -166,6 +204,41 @@ for factor_idx in t3_7_gof: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     plt.ylabel("p-hat")
     plt.show()
 
+    # Violin plot (lighter + count-scaled)
+    plt.figure(figsize=(8, 5))
+    sns.violinplot(
+        x=obs_col,
+        y=f'phat_factor{factor_idx+1}',
+        data=adata_sub.obs,
+        order=['control_0', 'control_1', 'case_0', 'case_1'],
+        inner="box",
+        cut=0,
+        density_norm="count",
+        color="skyblue",
+        alpha=0.4,
+        linewidth=1
+    )
+
+    # Swarm plot (data points)
+    sns.swarmplot(
+        x=obs_col,
+        y=f'phat_factor{factor_idx+1}',
+        data=adata_sub.obs,
+        order=['control_0', 'control_1', 'case_0', 'case_1'],
+        color="k",
+        size=3,
+        alpha=0.5,
+        zorder=3
+    )
+
+    plt.axhline(y=threshold, color='r', linestyle='--')
+    plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})", fontsize=20)
+    plt.xlabel("Cluster", fontsize=18)
+    plt.ylabel("p-hat", fontsize=18)
+    plt.xticks(fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.tight_layout()
+    plt.show()
 
     
     num_sig_DE = {}
