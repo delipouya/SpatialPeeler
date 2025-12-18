@@ -177,6 +177,7 @@ t7_lof = [10, 18, 7]
 
 visualize_each_factor = True
 exception_vis = True
+i = t3_7_gof_v2[0]
 
 for i in t3_7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
@@ -245,16 +246,14 @@ for i in t3_7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(ma
         for sample_id in sample_ids
     }
     if visualize_each_factor:
-        #plot.
-        plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_cluster', 
+        plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_cluster', 
                title_prefix=f"Factor {i+1} Clusters", 
                from_obsm=False, figsize=(43, 30), fontsize=45,
                 dot_size=60, palette_continuous='viridis_r') #figsize=(42, 30), fontsize=45 
 
         ### visualize the factor scores on spatial maps for each sample
         adata.obs[f'Factor_{i+1}_score'] = Xi.astype('float32')
-        #plot.
-        plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_score', 
+        plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_score', 
                title_prefix=f" Factor {i+1} Scores", 
                from_obsm=False, figsize=(43, 30), fontsize=45,
                 dot_size=60, palette_continuous='viridis_r') #figsize=(42, 30), fontsize=45
@@ -380,12 +379,38 @@ results = all_results
 results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
 
 ### save the results using pickle
-with open(results_filename, 'wb') as f:
-    pickle.dump(results, f)
+#with open(results_filename, 'wb') as f:
+#    pickle.dump(results, f)
 
 # Load
 with open(results_filename, 'rb') as f:
     results = pickle.load(f)
+
+
+### count the number of spots included high_cluster_indices for each factor within each sample_id
+factor_sample_counts = []
+for res in results:
+    high_cluster_indices = res['high_cluster_indices']
+    sample_ids_high = adata.obs['sample_id'].iloc[high_cluster_indices].values
+    sample_counts = pd.Series(sample_ids_high).value_counts().to_dict()
+    factor_sample_counts.append({
+        'factor_index': res['factor_index'],
+        'sample_counts': sample_counts
+    })
+
+for i in t3_7_gof_v2:
+    ### create a barplot for the counts of spots in high-expression cluster for each sample_id
+    factor_count_dict = factor_sample_counts[i]['sample_counts']
+    samples = list(factor_count_dict.keys())
+    counts = list(factor_count_dict.values())
+    plt.figure(figsize=(6, 6))
+    sns.barplot(x=samples, y=counts)
+    plt.title(f"Factor {i+1} - High-Exp Cluster Spot Counts perSample", fontsize=16)
+    plt.xlabel("Sample ID", fontsize=16)
+    plt.ylabel("#Spots in high-Exp Cluster", fontsize=16)
+    plt.xticks(rotation=45, fontsize=12)
+    plt.tight_layout()
+    plt.show()
 
 # Extract full model stats for each factor
 coef_list = [res['coef'] for res in results]
@@ -578,6 +603,9 @@ for factor_index in t3_7_gof_v2:
     plt.title(f'Factor {factor_index+1}: NMF Loading vs Pearson Correlation', fontsize=18)
     plt.tight_layout()
     plt.show()
+
+
+    
 
     
 
