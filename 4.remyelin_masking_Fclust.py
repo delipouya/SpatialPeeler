@@ -28,7 +28,9 @@ CASE_COND_NAME = 'LPC'
 
 
 #results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7.pkl'
-results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
+#results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
+results_filename = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
+
 with open(results_filename, 'rb') as f:
     results = pickle.load(f)
 
@@ -57,22 +59,27 @@ def get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1):
         return sig_de.shape[0]
 
 
-t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
-
 t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
 t18_gof = [9, 2, 12, 18]
 t18_lof = [3, 6, 19]
 t7_gof = [0, 12, 20, 2]
 t7_lof = [10, 18, 7]
 
-factor_idx = t3_7_gof_v2[0]
 
-for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
+t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
+t3_7_gof_v2_noFclust = [4, 13, 16, 3, 17, 29, 26, 0, 23]
+
+
+factor_idx = t3_7_gof_v2_noFclust[0]
+
+for factor_idx in t3_7_gof_v2_noFclust: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print(f"Factor {factor_idx+1}")
     result = results[factor_idx]
     p_hat_factor = result['p_hat']
-    high_cluster_indices = result['high_cluster_indices']
-
+    if 'high_cluster_indices' in result:
+        high_cluster_indices = result['high_cluster_indices']
+    else:
+        high_cluster_indices = np.arange(adata.n_obs)
     
     adata_sub = adata[high_cluster_indices].copy()
 
@@ -125,16 +132,6 @@ for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     ## replace case_nan with control
     adata_sub.obs[obs_col] = adata_sub.obs[obs_col].replace('case_nan', 'control')
     ### visualize p-hat scores over cluster 0 and 1 as violin plot
-    plt.figure(figsize=(6, 5))
-    sns.violinplot(x=obs_col, y='phat_factor'+str(factor_idx+1), 
-                   data=adata_sub.obs,
-                   order=['control','case_0', 'case_1'])
-    plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})")
-    plt.axhline(y=threshold, color='r', linestyle='--')
-    
-    plt.xlabel("Cluster")
-    plt.ylabel("p-hat")
-    plt.show()
 
     # Violin plot (lighter + count-scaled)
     plt.figure(figsize=(6, 5))
@@ -151,6 +148,7 @@ for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
         linewidth=1
     )
     # Swarm plot (data points)
+    '''
     sns.swarmplot(
         x=obs_col,
         y=f'phat_factor{factor_idx+1}',
@@ -161,7 +159,7 @@ for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
         alpha=0.5,
         zorder=3
     )
-
+    '''
     plt.axhline(y=threshold, color='r', linestyle='--')
     plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})", fontsize=19)
     plt.xlabel("Cluster", fontsize=18)
@@ -193,17 +191,6 @@ for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     ## check the stats of each cluster
     print(adata_sub.obs[obs_col].value_counts())
 
-    ### visualize p-hat scores over cluster 0 and 1 as violin plot
-    plt.figure(figsize=(8, 5))
-    sns.violinplot(x=obs_col, y='phat_factor'+str(factor_idx+1), 
-                   data=adata_sub.obs,
-                   order=['control_0', 'control_1', 'case_0', 'case_1'])
-    plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})")
-    plt.axhline(y=threshold, color='r', linestyle='--')
-    plt.xlabel("Cluster")
-    plt.ylabel("p-hat")
-    plt.show()
-
     # Violin plot (lighter + count-scaled)
     plt.figure(figsize=(8, 5))
     sns.violinplot(
@@ -218,7 +205,7 @@ for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
         alpha=0.4,
         linewidth=1
     )
-
+    '''
     # Swarm plot (data points)
     sns.swarmplot(
         x=obs_col,
@@ -230,7 +217,7 @@ for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
         alpha=0.5,
         zorder=3
     )
-
+    '''
     plt.axhline(y=threshold, color='r', linestyle='--')
     plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})", fontsize=20)
     plt.xlabel("Cluster", fontsize=18)
@@ -413,6 +400,43 @@ for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     num_sig_DE['case0_vs_control0'] = get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1)
     print(f"Number of significant DE genes (case0 vs control0): {num_sig_DE['case0_vs_control0']}")
     
+    ###############################################################################
+    ###### Perform DE between control_1 and control_0
+    control_1_mask = (adata_sub.obs[obs_col] == 'control_1').values
+    control_0_mask = (adata_sub.obs[obs_col] == 'control_0').values
+    # Subset to the two clusters
+    keep = control_1_mask | control_0_mask
+    ad = adata_sub[keep].copy()
+    # Temporary 2-level group label
+    grp_col = "_tmp_de_group"
+    ad.obs[grp_col] = pd.Categorical(
+        np.where(control_1_mask[keep], "control1", "control0"),
+        categories=["control0", "control1"]
+    )
+    # Wilcoxon DE: control1 vs control0
+    sc.tl.rank_genes_groups(
+        ad,
+        groupby=grp_col,
+        groups=["control1"],
+        reference="control0",
+        method="wilcoxon",
+        corr_method="benjamini-hochberg",
+        use_raw=False,
+        layer=None,
+        n_genes=ad.n_vars
+    )
+    de_results = sc.get.rank_genes_groups_df(ad, group="control1").rename(columns={"names": "gene"})
+    # score column: Z-statistic (standardized Wilcoxon rank-sum score) computed for each gene after comparing expression ranks between groups.    
+    gene_names = hlps.map_ensembl_to_symbol(de_results.gene.tolist(), species='mouse')
+    de_results['gene_name'] = de_results['gene'].map(gene_names)
+    print('-----------------------------------')
+    print('Control1 vs Control0')
+    print(de_results.head(20))  
+    print('-----------------------------------')
+    num_sig_DE['control1_vs_control0'] = get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1)
+    print(f"Number of significant DE genes (control1 vs control0): {num_sig_DE['control1_vs_control0']}")
+
+
     ### calculate residual: Y-phat
     #logit_phat = plot.safe_logit(adata.obs['phat_factor'+str(factor_idx+1)].values)
     #adata.obs['Condition_binary'] = (adata.obs['Condition'] == CASE_COND_NAME).astype(int)
@@ -441,6 +465,13 @@ for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     ###############################################################################
 
     sample_ids = adata_sub.obs['sample_id'].unique().tolist()
+    ### put NA for the spots that are. not phat_Cluster_factorX == 'case_1' to only visualize case_1 spots
+    adata_sub.obs['phat_factor'+str(factor_idx+1)+'_case1_only'] = np.nan
+    adata_sub.obs['phat_factor'+str(factor_idx+1)+'_case1_only'] = adata_sub.obs.apply(
+        lambda row: row['phat_factor'+str(factor_idx+1)] if row[obs_col] == 'case_1' else np.nan,
+        axis=1
+    )   
+    
     adata_by_sample = {
         sample_id: adata_sub[adata_sub.obs['sample_id'] == sample_id].copy()
         for sample_id in sample_ids
@@ -450,7 +481,7 @@ for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
         adata_by_sample, sample_ids, key=obs_col_num,
         title_prefix=f"Clusters (factor {factor_idx+1})",
         from_obsm=False, discrete=True,
-        dot_size=7, figsize=(25, 10),
+        dot_size=16, figsize=(25, 10),
         palette=palette_num
     )
 
@@ -465,13 +496,19 @@ for factor_idx in t3_7_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     plot.plot_grid_upgrade(adata_by_sample, sample_ids, key='phat_factor'+str(factor_idx+1),
                            title_prefix="p-hat (factor "+str(factor_idx+1)+")", 
                            from_obsm=False, discrete=False,
-                            dot_size=2, figsize=(25, 10))
+                            dot_size=16, figsize=(25, 10))
+
+    
+    plot.plot_grid_upgrade(adata_by_sample, sample_ids, key='phat_factor'+str(factor_idx+1)+'_case1_only',
+                           title_prefix="p-hat Case1 only (factor "+str(factor_idx+1)+")", 
+                           from_obsm=False, discrete=False,
+                            dot_size=16, figsize=(25, 10))
     
 
     ### visualize number of significant DE genes in different comparisons
     comparisons = list(num_sig_DE.keys())
     sig_de_counts = [num_sig_DE[comp] for comp in comparisons]  
-    plt.figure(figsize=(8, 5))
+    plt.figure(figsize=(13, 5))
     sns.barplot(x=comparisons, y=sig_de_counts, palette="viridis")
     plt.title(f"Number of significant Genes (factor {factor_idx+1})")
     plt.ylabel("#sig DE genes")

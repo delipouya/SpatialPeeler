@@ -336,6 +336,7 @@ def plot_grid_upgrade(
     invert_y=True,
     equal_aspect=True,
     discrete=False,
+    palette_continuous='viridis',
     palette=None,   # dict {class: color} or list of colors if discrete=True
 ):
     """
@@ -347,7 +348,7 @@ def plot_grid_upgrade(
     - discrete=True: treat 'values' as labels (ints/strings) and color via palette
     """
 
-    # -------- collect values across samples for a shared scale (continuous only) --------
+    # collect values across samples for a shared scale (continuous only)
     if not discrete:
         vals_all = []
         for s in sample_ids:
@@ -433,7 +434,7 @@ def plot_grid_upgrade(
         else:
             vals_plot = np.array(vals, dtype=float)
             vals_plot[~np.isfinite(vals_plot)] = np.nan
-            im = ax.scatter(x, y, c=vals_plot, cmap="viridis", s=dot_size,
+            im = ax.scatter(x, y, c=vals_plot, cmap=palette_continuous, s=dot_size,
                             vmin=vmin, vmax=vmax, edgecolors="none")
             last_im = im
 
@@ -473,6 +474,8 @@ def plot_grid_upgrade(
     right_margin = 0.9 if (not discrete) else 0.85  # leave room for legend
     plt.tight_layout(rect=[0, 0, right_margin, 0.95])
     plt.show()
+
+
 
 def plot_grid_naive(adata_by_sample, sample_ids, key, title_prefix, counter=None, 
               from_obsm=False, factor_idx=None, figsize=(16, 8), fontsize=10, 

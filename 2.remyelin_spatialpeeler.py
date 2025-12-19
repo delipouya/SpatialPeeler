@@ -167,7 +167,7 @@ plt.legend()
 plt.show()
 
 
-factor_id = 6#18
+factor_id = 4#18
 results[factor_id]['p_hat']  # p_hat for the first factor
 adata.obs['Condition']
 ### create a dataframe 
@@ -203,7 +203,9 @@ for i in range(0,optimal_num_pcs_ks): #optimal_num_pcs_ks
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t3_7.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18.pkl'
 #results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t18_K10.pkl'
-results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t7.pkl'
+#results_path = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/results_Remyelin_uncropped_t7.pkl'
+results_path = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
+
 with open(results_path, 'wb') as f:
     pickle.dump(results, f)
 
@@ -244,6 +246,10 @@ LOF_index = [3, 5, 7]
 #### uncropped - t7 indices
 GOF_index = [0, 12, 16, 20, 15]
 LOF_index = [27, 4, 10]
+
+#### uncropped - t3_7 indices - PreprocV2 without clustering factors
+GOF_index = [4, 13, 16, 3, 17, 29, 26, 0, 23]
+LOF_index = [10, 2, 18, 6, 20, 14]
 
 
 print(GOF_index)
@@ -303,7 +309,7 @@ plt.ylabel("p_hat Factors")
 plt.tight_layout()
 plt.show()
 
-for result in results_LOF: #results_LOF
+for result in results_GOF: #results_LOF
     print(f"Factor {result['factor_index'] + 1}:")
     factor_number = result['factor_index'] + 1
     print(f"  p_hat mean: {result['p_hat'].mean():.4f}")
@@ -328,20 +334,20 @@ for result in results_LOF: #results_LOF
         adata_by_sample_cropped[sample_id] = adata_sample[adata_sample.obs['cropped'] == True]
 
     # For NMF factor  (from obsm)
-    plot.plot_grid(adata_by_sample, sample_ids, key="X_nmf", 
+    plot.plot_grid_upgrade(adata_by_sample, sample_ids, key="X_nmf", palette_continuous="viridis_r",
     title_prefix=f" Factor {result['factor_index'] + 1}- " + "NMF ", counter=factor_number, from_obsm=True, 
     factor_idx=factor_number-1, figsize=(43, 20), fontsize=45, dot_size=30) #figsize=(45, 15), fontsize=45
 
-    plot.plot_grid(adata_by_sample_cropped, sample_ids, key="X_nmf", 
+    plot.plot_grid_upgrade(adata_by_sample_cropped, sample_ids, key="X_nmf", palette_continuous="viridis_r",
     title_prefix=f" Factor {result['factor_index'] + 1}- " + "NMF ", counter=factor_number, from_obsm=True, 
     factor_idx=factor_number-1, figsize=(43, 20), fontsize=45, dot_size=100) #figsize=(45, 33), fontsize=45
     
     # For p_hat #plot.
-    plot.plot_grid(adata_by_sample, sample_ids, key="p_hat", 
+    plot.plot_grid_upgrade(adata_by_sample, sample_ids, key="p_hat", palette_continuous="viridis_r",
     title_prefix=f" Factor {result['factor_index'] + 1}- " + "HiDDEN predictions", counter=factor_number, 
     figsize=(43, 20), fontsize=45, dot_size=30) #figsize=(42, 30), fontsize=45
 
-    plot.plot_grid(adata_by_sample_cropped, sample_ids, key="p_hat", 
+    plot.plot_grid_upgrade(adata_by_sample_cropped, sample_ids, key="p_hat", palette_continuous="viridis_r",
     title_prefix=f" Factor {result['factor_index'] + 1}- " + "HiDDEN predictions", counter=factor_number, 
     figsize=(43, 20), fontsize=45, dot_size=100) #figsize=(42, 30), fontsize=45
 
@@ -349,7 +355,7 @@ for result in results_LOF: #results_LOF
     df_violin = adata.obs[["sample_id", "p_hat"]].copy()
     plt.figure(figsize=(5, 7))
     sns.violinplot(
-        x="sample_id", y="p_hat", hue="sample_id", data=df_violin,
+        x="sample_id", y="p_hat", hue="sample_id", data=df_violin, cut=0,
         palette="Set2", density_norm="width", inner=None, legend=False
     )
     sns.boxplot(
@@ -366,11 +372,11 @@ for result in results_LOF: #results_LOF
     plt.figure(figsize=(5, 7))
     sns.violinplot(
         x="sample_id", y="p_hat", hue="sample_id", data=df_violin_cropped,
-        palette="Set2", density_norm="width", inner=None, legend=False
+        palette="Set2", density_norm="width", inner=None, legend=False, cut=0
     )
     sns.boxplot(
         x="sample_id", y="p_hat", data=df_violin_cropped,
-        color="white", width=0.1, fliersize=0
+        color="white", width=0.1, fliersize=0,
     )
     plt.xticks(rotation=45, ha="right")
     plt.title(f" Factor {result['factor_index'] + 1}- " + "Distribution of p_hat (cropped)", fontsize=13)
@@ -398,7 +404,7 @@ for i in range(optimal_num_pcs_ks):
     plt.show()
 
 
-for i in range(optimal_num_pcs_ks):
+for i in GOF_index:
     ### violin plot for nmf scores per sample
     nmf_scores = adata.obsm["X_nmf"][:, i]
     nmf_df = pd.DataFrame(nmf_scores,
@@ -407,15 +413,43 @@ for i in range(optimal_num_pcs_ks):
     nmf_long = nmf_df.melt(id_vars='sample_id',
                             var_name='Factor',
                             value_name='Score')
-    plt.figure(figsize=(12, 5))
+    plt.figure(figsize=(5, 8)) #
     sns.violinplot(x="sample_id", y="Score", hue="sample_id",
-                     data=nmf_long, inner="box", palette="Set2")
+                     data=nmf_long, inner="box", palette="Set2", cut=0)
+
+
     plt.title(f"Distribution of NMF Factor {i+1} Scores per Sample")
     plt.xticks(rotation=45, ha="right")
+    plt.ylabel("NMF Score")
     plt.tight_layout()
     plt.show()
+######################################################
 
+### barplot of number of zero values in nmf scores for each sample - loop through factors
+### make it a stacked barplot of total values vs zero values
+for i in GOF_index + LOF_index:
+    nmf_scores = adata.obsm["X_nmf"][:, i]
+    nmf_df = pd.DataFrame(nmf_scores,
+                            columns=[f'NMF{i+1}'])
+    nmf_df['sample_id'] = adata.obs['sample_id'].values
+    nmf_df['is_zero'] = nmf_df[f'NMF{i+1}'] == 0
 
+    zero_counts = nmf_df.groupby('sample_id')['is_zero'].sum()
+    total_counts = nmf_df['sample_id'].value_counts()
+    non_zero_counts = total_counts - zero_counts
+
+    stacked_df = pd.DataFrame({
+        'Zero Values': zero_counts,
+        'Non-Zero Values': non_zero_counts
+    }).reset_index().melt(id_vars='sample_id', var_name='Value Type', value_name='Count')
+
+    plt.figure(figsize=(8, 6))
+    sns.barplot(x='sample_id', y='Count', hue='Value Type', data=stacked_df, palette=['red', 'green'])
+    plt.title(f"Count of Zero vs Non-Zero NMF Factor {i+1} Scores per Sample")
+    plt.xticks(rotation=45, ha="right")
+    plt.ylabel("Spot Count")
+    plt.tight_layout()
+    plt.show()
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder

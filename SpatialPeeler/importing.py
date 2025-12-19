@@ -27,7 +27,7 @@ vis.visual_settings()
 
 
 
-def load_slide_seq_puck(puck_dir, puck_id, normalize_log1p=True):
+def load_slide_seq_puck(puck_dir, puck_id, normalize_log1p=False):
     """
     Load a single Slide-seq puck (from root of each puck folder).
     """
@@ -58,6 +58,7 @@ def load_slide_seq_puck(puck_dir, puck_id, normalize_log1p=True):
     cell_barcodes = barcodes.iloc[:, 0].values
 
     adata = anndata.AnnData(X=X.T)
+    adata.layers["counts"] = adata.X.copy()
     adata.var_names = gene_names
     adata.obs_names = [f"{puck_id}_{bc}" for bc in cell_barcodes]
     adata.obs['puck_id'] = puck_id
