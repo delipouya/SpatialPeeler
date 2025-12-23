@@ -376,7 +376,9 @@ for i in t3_7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(ma
 
     
 results = all_results
-results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
+
+#results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
+results_filename = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
 
 ### save the results using pickle
 #with open(results_filename, 'wb') as f:
@@ -470,16 +472,24 @@ PATTERN_COND = 'GOF'#'GOF'
 sample_id_to_check = 2#1#12#6
 
 t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
-
 t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
 t18_gof = [9, 2, 12, 18]
 t18_lof = [3, 6, 19]
 t7_gof = [0, 12, 20, 2]
 t7_lof = [10, 18, 7]
+#### uncropped - t3_7 indices - PreprocV2 without clustering factors
+t3_7_gof_v2_noFclust = [4, 13, 16, 3, 17, 29, 26, 0, 23]
 
+results_path = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
+with open(results_path, 'rb') as f:
+    results = pickle.load(f)
 
-for factor_index in t3_7_gof_v2:
-    adata_sub = adata[results[factor_index]['high_cluster_indices'], :].copy()
+for factor_index in t3_7_gof_v2_noFclust:
+    if 'high_cluster_indices' in results[factor_index]:
+        print(f"Factor {factor_index+1} - Number of spots in high-expression cluster: {len(results[factor_index]['high_cluster_indices'])}")
+        adata_sub = adata[results[factor_index]['high_cluster_indices'], :].copy()
+    else:
+        adata_sub = adata.copy()
     print(adata_sub.shape)
     adata_sub.obs['p_hat'] = results[factor_index]['p_hat'].astype('float32')
     adata_sub.obs['1_p_hat'] = 1 - adata_sub.obs['p_hat'].astype('float32')

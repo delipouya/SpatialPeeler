@@ -443,7 +443,7 @@ for i in GOF_index + LOF_index:
         'Non-Zero Values': non_zero_counts
     }).reset_index().melt(id_vars='sample_id', var_name='Value Type', value_name='Count')
 
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(10, 10))
     sns.barplot(x='sample_id', y='Count', hue='Value Type', data=stacked_df, palette=['red', 'green'])
     plt.title(f"Count of Zero vs Non-Zero NMF Factor {i+1} Scores per Sample")
     plt.xticks(rotation=45, ha="right")

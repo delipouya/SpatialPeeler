@@ -227,7 +227,7 @@ for factor_idx in t3_7_gof_v2_noFclust: #range(min(max_factors, X.shape[1])) ,3,
     plt.tight_layout()
     plt.show()
 
-    
+    '''
     num_sig_DE = {}
     ###############################################################################
     ### perform DE between case 0 and 1
@@ -444,7 +444,7 @@ for factor_idx in t3_7_gof_v2_noFclust: #range(min(max_factors, X.shape[1])) ,3,
     #response_residual = Y - logit_phat
     #adata.obs['residual'+str(factor_idx+1)] = response_residual
 
-    
+    '''
     
     ### I added this mapping to resolve the color issue in plotting the clusters
     ###############################################################################
@@ -499,10 +499,11 @@ for factor_idx in t3_7_gof_v2_noFclust: #range(min(max_factors, X.shape[1])) ,3,
                             dot_size=16, figsize=(25, 10))
 
     
-    plot.plot_grid_upgrade(adata_by_sample, sample_ids, key='phat_factor'+str(factor_idx+1)+'_case1_only',
+    plot.plot_grid_upgrade(adata_by_sample, sample_ids, 
+                           key='phat_factor'+str(factor_idx+1)+'_case1_only',
                            title_prefix="p-hat Case1 only (factor "+str(factor_idx+1)+")", 
                            from_obsm=False, discrete=False,
-                            dot_size=16, figsize=(25, 10))
+                            dot_size=18, figsize=(25, 10))
     
 
     ### visualize number of significant DE genes in different comparisons

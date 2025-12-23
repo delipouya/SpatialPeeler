@@ -79,7 +79,7 @@ print(metadata_df[metadata_df['sample_id'].isin(sample_id_merged)])
 print(metadata_df.head())
 print(metadata_df.shape)
 
-adata_merged = imp.load_all_slide_seq_data(root_dir, normalize_log1p=False)
+adata_merged = imp.load_all_slide_seq_data(root_dir, normalize_log1p=False, scale_features=True)
 adata_merged = adata_merged[adata_merged.obs['puck_id'].isin(sample_id_merged)]
 adata_merged.obs['puck_id'].value_counts()
 #adata_merged.X = adata_merged.layers['lognorm'].copy() # Use preprocessed layer (no additional log1p needed)
@@ -116,7 +116,7 @@ if import_cropped:
 
 
 ############################################
-# cNMF-style preprocessing (pooled over pucks)
+# cNMF-style preprocessing (pooled over pucks) - each sample is unit-variance scaled while importing (load_all_slide_seq_data with scale_features=True)
 ############################################
 # ---- 0) Ensure we have raw counts to use for cNMF ----
 # cNMF is intended to run on (non-log) counts with gene-wise scaling, not log1p-normalized X.
@@ -163,11 +163,7 @@ sc.pp.highly_variable_genes(
     subset=True
 )
 
-# 4) unit-variance scaling WITHOUT centering ----
-# Keeps non-negativity (important for NMF) while matching the "variance normalize" idea.
-sc.pp.scale(adata_cnmf, zero_center=False)
-
-# 5) sanity checks for NMF readiness ----
+# 4) sanity checks for NMF readiness ----
 # Must be non-negative (or at least not heavily negative). If you see negatives, something upstream centered.
 if sp.issparse(adata_cnmf.X):
     min_val = adata_cnmf.X.min()
