@@ -63,9 +63,11 @@ metadata_df = metadata_df[~duplicate_rows_mask]
 
 LPC_t3_mask = (metadata_df['Timepoint'] == 3) & (metadata_df['Condition'] == 'LPC')
 sample_id_LPC_t3 = metadata_df[LPC_t3_mask]['sample_id'].values.tolist()
-Saline_t3_7_mask = (metadata_df['Timepoint'].isin([3,7])) & (metadata_df['Condition'] == 'Saline')
-sample_id_Saline_t3_7 = metadata_df[Saline_t3_7_mask]['sample_id'].values.tolist()
-sample_id_merged = sample_id_LPC_t3 + sample_id_Saline_t3_7
+
+### for the control samples, we use timepoints 12 and 18, as timepoints 3 and 7 are sparse, leading to technical variation
+Saline_t12_18_mask = (metadata_df['Timepoint'].isin([12,18])) & (metadata_df['Condition'] == 'Saline')
+sample_id_Saline_t12_18 = metadata_df[Saline_t12_18_mask]['sample_id'].values.tolist()
+sample_id_merged = sample_id_LPC_t3 + sample_id_Saline_t12_18
 
 
 #LPC_t7_mask = (metadata_df['Timepoint'] == 7) & (metadata_df['Condition'] == 'LPC')
@@ -217,7 +219,8 @@ adata_cnmf.uns["nmf"] = {
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
 adata_cnmf.write_h5ad(file_name)
 
 

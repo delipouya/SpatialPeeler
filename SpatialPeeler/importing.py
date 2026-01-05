@@ -27,7 +27,7 @@ vis.visual_settings()
 
 
 
-def load_slide_seq_puck(puck_dir, puck_id, normalize_log1p=False):
+def load_slide_seq_puck(puck_dir, puck_id, normalize_log1p=False, scale_features=True):
     """
     Load a single Slide-seq puck (from root of each puck folder).
     """
@@ -62,6 +62,11 @@ def load_slide_seq_puck(puck_dir, puck_id, normalize_log1p=False):
     adata.var_names = gene_names
     adata.obs_names = [f"{puck_id}_{bc}" for bc in cell_barcodes]
     adata.obs['puck_id'] = puck_id
+    
+    if scale_features:
+        # unit-variance scaling WITHOUT centering 
+        # Keeps non-negativity (important for NMF) while matching the "variance normalize" idea.
+        sc.pp.scale(adata, zero_center=False)
 
     # Optional per-puck normalization and log1p
     if normalize_log1p:
@@ -86,7 +91,7 @@ def load_slide_seq_puck(puck_dir, puck_id, normalize_log1p=False):
 
 
 
-def load_all_slide_seq_data(root_dir,  normalize_log1p=True):
+def load_all_slide_seq_data(root_dir,  normalize_log1p=False, scale_features=True):
     """
     Load all puck folders (assuming .mtx and .tsv files live directly inside each puck folder root).
     """

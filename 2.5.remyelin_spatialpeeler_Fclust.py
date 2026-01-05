@@ -33,7 +33,8 @@ np.random.seed(RAND_SEED)
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
 
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
@@ -164,7 +165,7 @@ all_results = []
 X = adata.obsm[factor_key]
 y = adata.obs["Condition"].values
 sample_ids = adata.obs["sample_id"].values
-i = 9
+i = 1
 
 t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
 t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
@@ -173,54 +174,84 @@ t18_gof = [9, 2, 12, 18]
 t18_lof = [3, 6, 19]
 t7_gof = [0, 12, 20, 2]
 t7_lof = [10, 18, 7]
-
-
-visualize_each_factor = True
-exception_vis = True
 i = t3_7_gof_v2[0]
+t3_gof_control12_18 = [8, 13, 16, 28, 0, 4, 21, 2, 11]
 
-for i in t3_7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
+
+thresholding = 'zero'  # 'zero' or 'kmeans'
+visualize_each_factor = False
+exception_vis = False
+
+for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)
     #print(Xi.min(), Xi.max())
 
-    kmeans = KMeans(n_clusters=2, random_state=RAND_SEED)
-    kmeans.fit(Xi.reshape(-1, 1))
-    centers = kmeans.cluster_centers_.ravel()
-    print(centers)
-    order = np.argsort(centers)               # [low_center_label, high_cluster_label]
-    print(order)
-    remap = {order[0]: 0, order[1]: 1}
-    print(remap)
-    labels_remapped = np.vectorize(remap.get)(kmeans.labels_).astype(int)
-    
-    
-    min_cluster0 = Xi[labels_remapped == 0].min()
-    max_cluster0 = Xi[labels_remapped == 0].max()
-    min_cluster1 = Xi[labels_remapped == 1].min()
-    max_cluster1 = Xi[labels_remapped == 1].max()
+    # --- threshold-based filter instead of KMeans ---
+    if thresholding == 'zero':
+        threshold = 0.0
+        high_mask = (Xi.ravel() > threshold)          # use >= if you want to include zeros
+        high_cluster_indices = np.where(high_mask)[0]
 
-    print('original labels: ', kmeans.labels_)
-    print("Labels remapped: ", labels_remapped)
-    print('cluster-0 min/max:', min_cluster0, max_cluster0)
-    print('cluster-1 min/max:', min_cluster1, max_cluster1)
+        Xi_high = Xi[high_cluster_indices]
+        y_high = y[high_cluster_indices]
+        y_high = (np.asarray(y_high) == "LPC").astype(int)
 
-    if min_cluster0 > min_cluster1 or max_cluster0 > max_cluster1:
-        print("Error in clustering remapping!")
-        break   
+        print(f"Using {len(high_cluster_indices)} samples with Xi > {threshold} for logistic regression")
 
-    # Calculate the threshold as the midpoint between the centroids
-    threshold = np.mean(centers)
-    #print(f"Centroids: {centers.flatten()}")
-    #print(f"Binarization Threshold: {threshold}")
+        # Optional: sanity stats (rough analog of your min/max prints)
+        if len(high_cluster_indices) == 0:
+            print("Warning: no samples passed the threshold; skipping this factor.")
+            continue  # or handle however you prefer
 
-    ### only use Xi with high mean cluster for the logistic regression
-    high_cluster_label = 1
-    high_cluster_indices = np.where(labels_remapped == high_cluster_label)[0]
-    Xi_high = Xi[high_cluster_indices]
-    y_high = y[high_cluster_indices]
-    print(f"Using {len(high_cluster_indices)} samples from high-expression cluster for logistic regression")
+        low_mask = ~high_mask
+        if low_mask.any():
+            print("low (<=thr) min/max:", Xi.ravel()[low_mask].min(), Xi.ravel()[low_mask].max())
+        print("high (>thr)  min/max:", Xi.ravel()[high_mask].min(), Xi.ravel()[high_mask].max())
+
+        labels_remapped = high_mask.astype(int)
+
+
+    # --- KMeans clustering to separate into two clusters ---
+    elif thresholding == 'kmeans':
+        kmeans = KMeans(n_clusters=2, random_state=RAND_SEED)
+        kmeans.fit(Xi.reshape(-1, 1))
+        centers = kmeans.cluster_centers_.ravel()
+        print(centers)
+        order = np.argsort(centers)               # [low_center_label, high_cluster_label]
+        print(order)
+        remap = {order[0]: 0, order[1]: 1}
+        print(remap)
+        labels_remapped = np.vectorize(remap.get)(kmeans.labels_).astype(int)
+        
+        
+        min_cluster0 = Xi[labels_remapped == 0].min()
+        max_cluster0 = Xi[labels_remapped == 0].max()
+        min_cluster1 = Xi[labels_remapped == 1].min()
+        max_cluster1 = Xi[labels_remapped == 1].max()
+
+        print('original labels: ', kmeans.labels_)
+        print("Labels remapped: ", labels_remapped)
+        print('cluster-0 min/max:', min_cluster0, max_cluster0)
+        print('cluster-1 min/max:', min_cluster1, max_cluster1)
+
+        if min_cluster0 > min_cluster1 or max_cluster0 > max_cluster1:
+            print("Error in clustering remapping!")
+            break   
+
+        # Calculate the threshold as the midpoint between the centroids
+        threshold = np.mean(centers)
+        #print(f"Centroids: {centers.flatten()}")
+        #print(f"Binarization Threshold: {threshold}")
+
+        ### only use Xi with high mean cluster for the logistic regression
+        high_cluster_label = 1
+        high_cluster_indices = np.where(labels_remapped == high_cluster_label)[0]
+        Xi_high = Xi[high_cluster_indices]
+        y_high = y[high_cluster_indices]
+        y_high = (np.asarray(y_high) == 'LPC').astype(int)
+        print(f"Using {len(high_cluster_indices)} samples from high-expression cluster for logistic regression")
 
     if visualize_each_factor:
         ### cluster the Xi into 2 clusters 
@@ -233,6 +264,7 @@ for i in t3_7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(ma
         plt.xlabel("Factor scores for all spots")
         plt.ylabel("Count")
         plt.show()
+
     
     ########################### VISUALIZATION ########################
     ## add the factor clustering results to adata object and vidualize all spatial samples
@@ -313,17 +345,18 @@ for i in t3_7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(ma
             palette={"Saline": "skyblue", "LPC": "salmon"}
         )
 
-        # Swarm plot (data points)
-        sns.swarmplot(
-            y="p_hat",
-            x="disease",
-            data=df_p_hat,
-            order=["Saline", "LPC"],
-            color="k",
-            size=3,
-            alpha=0.5,
-            zorder=3
-        )
+        if thresholding == 'kmeans':
+            # Swarm plot (data points)
+            sns.swarmplot(
+                y="p_hat",
+                x="disease",
+                data=df_p_hat,
+                order=["Saline", "LPC"],
+                color="k",
+                size=3,
+                alpha=0.5,
+                zorder=3
+            )
         plt.title(f"Factor {i+1} - p_hat Distribution (High-Exp Cluster)")
         plt.tight_layout()
         plt.show()
@@ -342,17 +375,18 @@ for i in t3_7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(ma
             palette={sid: "skyblue" for sid in saline_samples}
                     | {sid: "salmon" for sid in lpc_samples}
         )
-        # Swarm plot (data points)
-        sns.swarmplot(
-            y="p_hat",
-            x="sample_id",
-            data=df_p_hat,
-            order=saline_samples + lpc_samples,
-            color="k",
-            size=5,
-            alpha=0.5,
-            zorder=3
-        )
+        if thresholding == 'kmeans':
+            # Swarm plot (data points)
+            sns.swarmplot(
+                y="p_hat",
+                x="sample_id",
+                data=df_p_hat,
+                order=saline_samples + lpc_samples,
+                color="k",
+                size=5,
+                alpha=0.5,
+                zorder=3
+            )
         plt.title(f"Factor {i+1} - p_hat Distribution (High-Exp Cluster)")
         plt.tight_layout()
         plt.show()
@@ -378,11 +412,13 @@ for i in t3_7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(ma
 results = all_results
 
 #results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
-results_filename = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
+#results_filename = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
+
+results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_t3_gof_control12_18.pkl'
 
 ### save the results using pickle
-#with open(results_filename, 'wb') as f:
-#    pickle.dump(results, f)
+with open(results_filename, 'wb') as f:
+    pickle.dump(results, f)
 
 # Load
 with open(results_filename, 'rb') as f:
@@ -400,7 +436,7 @@ for res in results:
         'sample_counts': sample_counts
     })
 
-for i in t3_7_gof_v2:
+for i in t3_gof_control12_18:
     ### create a barplot for the counts of spots in high-expression cluster for each sample_id
     factor_count_dict = factor_sample_counts[i]['sample_counts']
     samples = list(factor_count_dict.keys())
@@ -469,7 +505,7 @@ plt.show()
 
 factor_index = 0  # Change this to the desired factor index (0-based)
 PATTERN_COND = 'GOF'#'GOF'
-sample_id_to_check = 2#1#12#6
+sample_id_to_check = 1#1#12#6
 
 t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
 t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
@@ -480,11 +516,11 @@ t7_lof = [10, 18, 7]
 #### uncropped - t3_7 indices - PreprocV2 without clustering factors
 t3_7_gof_v2_noFclust = [4, 13, 16, 3, 17, 29, 26, 0, 23]
 
-results_path = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
+results_path = 'remyelin_nmf30_hidden_logistic_zeroThr_t3_gof_control12_18.pkl'
 with open(results_path, 'rb') as f:
     results = pickle.load(f)
 
-for factor_index in t3_7_gof_v2_noFclust:
+for factor_index in t3_gof_control12_18:
     if 'high_cluster_indices' in results[factor_index]:
         print(f"Factor {factor_index+1} - Number of spots in high-expression cluster: {len(results[factor_index]['high_cluster_indices'])}")
         adata_sub = adata[results[factor_index]['high_cluster_indices'], :].copy()
