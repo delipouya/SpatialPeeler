@@ -245,3 +245,5 @@ for gene_symbol in ['Snap25', 'Mbp', 'Ttr']:
         plot.plot_gene_spatial(an_adata_sample, gene_ensembl[gene_symbol], 
                                 title=f"{gene_symbol} - {sample_ids[sample_id_to_check]}", 
                                 cmap="viridis")
+
+
