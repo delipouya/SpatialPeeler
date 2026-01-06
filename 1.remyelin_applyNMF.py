@@ -156,14 +156,20 @@ print("Number of spots with total counts < "+str(min_counts)+":", np.sum(adata_c
 ### filter out spots with less than 1000 UMI counts
 sc.pp.filter_cells(adata_cnmf, min_counts=min_counts)  # adjust if you want a hard cutoff
 
-# 3) HVG selection across pooled data, but batch-aware to avoid puck dominance ----
-sc.pp.highly_variable_genes(
-    adata_cnmf,
-    n_top_genes=2000,
-    batch_key="puck_id",     # use puck_id as the "sample" grouping
-    flavor="seurat_v3",
-    subset=True
-)
+USE_ALL_GENES = True
+if USE_ALL_GENES:
+    pass  # keep all genes after min_cells filtering
+else:
+    # 3) HVG selection across pooled data, but batch-aware to avoid puck dominance ----
+    sc.pp.highly_variable_genes(
+        adata_cnmf,
+        n_top_genes=2000,
+        batch_key="puck_id",     # use puck_id as the "sample" grouping
+        flavor="seurat_v3",
+        subset=True
+    )
+
+print(adata_cnmf.shape)
 
 # 4) sanity checks for NMF readiness ----
 # Must be non-negative (or at least not heavily negative). If you see negatives, something upstream centered.
@@ -220,7 +226,8 @@ adata_cnmf.uns["nmf"] = {
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise_ALLGENES.h5ad'
 adata_cnmf.write_h5ad(file_name)
 
 

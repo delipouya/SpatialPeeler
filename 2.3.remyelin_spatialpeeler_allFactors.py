@@ -29,7 +29,9 @@ import pickle
 RAND_SEED = 28
 CASE_COND = 1
 np.random.seed(RAND_SEED)
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise_ALLGENES.h5ad'
+
 adata_cropped = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 adata = sc.read_h5ad(file_name)
 ### cropped data
@@ -49,6 +51,8 @@ adata.obs['cropped'] = adata.obs['barcode'].isin(adata_cropped.obs['bead'])
 
 
 sample_ids = adata.obs['sample_id'].unique().tolist()
+
+
 # Create a dictionary splitting the merged data by sample
 adata_by_sample = {
     sid: adata[adata.obs['sample_id'] == sid].copy()
@@ -110,6 +114,8 @@ plt.tight_layout()
 plt.show()
 
 
+
+
 ##################################################################
 ########### Running logistic regression on all the NMF factors ######################
 
@@ -126,7 +132,15 @@ factor_key = "X_nmf"
 y = adata.obs["Condition"].values
 y_int = (np.asarray(y) == "LPC").astype(int)
 
+regress_factor_1 = False
 X = adata.obsm[factor_key]
+print(X.shape)
+
+if regress_factor_1:
+    #### remove the first factor from X
+    X = X[:, 1:]
+    print(X.shape)
+
 # Add intercept explicitly
 X_with_intercept = sm.add_constant(X)
 
@@ -200,8 +214,63 @@ plot.plot_grid_upgrade(adata_by_sample, sample_ids, key="p_hat", from_obsm=False
     figsize=(43, 20), fontsize=45, dot_size=60) #figsize=(42, 30), fontsize=45
 
 
+##################################################################
+i = 0
+### visualize the factor scores on spatial maps for each sample
+adata.obs[f'Factor_{i+1}_score'] = adata.obsm['X_nmf'][:, i]
+adata_by_sample = {
+    sid: adata[adata.obs['sample_id'] == sid].copy()
+    for sid in adata.obs['sample_id'].unique()
+}
+plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_score', 
+        title_prefix=f" Factor {i+1} Scores", 
+        from_obsm=False, figsize=(43, 30), fontsize=45,
+        dot_size=60, palette_continuous='viridis_r') #figsize=(42, 30), fontsize=45
+
+### plot beta_i*f_i spatial maps for each sample
+adata.obs[f'Factor_{i+1}_contribution'] = coef[i+1] * adata.obsm['X_nmf'][:, i]
+adata_by_sample = {
+    sid: adata[adata.obs['sample_id'] == sid].copy()
+    for sid in adata.obs['sample_id'].unique()
+}
+plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_contribution', 
+        title_prefix=f" Factor {i+1} * coefficient", 
+        from_obsm=False, figsize=(43, 30), fontsize=45,
+        dot_size=60, palette_continuous='viridis_r') #figsize=(42, 30), fontsize=45
+
+### scatter plot of factor-1 scores vs p-hat values
+plt.figure(figsize=(6, 6))
+sns.scatterplot(
+    x=f'Factor_{i+1}_score',
+    y='p_hat',
+    hue='Condition',
+    data=adata.obs,
+    alpha=0.6,
+    palette={"Saline": "skyblue", "LPC": "salmon"}
+)
+plt.title(f"Factor {i+1} Scores vs p-hat")
+plt.xlabel(f"Factor {i+1} Score")
+plt.ylabel("p-hat")
+plt.legend(title="Condition")
+plt.show()
+
+### scatter plot of factor-1 scores vs factor-1*beta contribution values
+plt.figure(figsize=(6, 6))
+sns.scatterplot(
+    x=f'Factor_{i+1}_score',
+    y=f'Factor_{i+1}_contribution',
+    hue='Condition',
+    data=adata.obs,
+    alpha=0.6,
+    palette={"Saline": "skyblue", "LPC": "salmon"}
+)
+plt.title(f"Factor {i+1} Scores vs Factor {i+1} Contribution")
+plt.xlabel(f"Factor {i+1} Score")
+plt.ylabel(f"Factor {i+1} Contribution")
 
 
+
+##################################################################
 def get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1):
         sig_de = de_results[
             (de_results['pvals_adj'] < fdr_threshold) &
@@ -329,7 +398,6 @@ plt.title("Cell counts per cluster")
 plt.xlabel("Cluster")
 plt.ylabel("Number of cells")
 plt.show()
-
 
 
     
@@ -567,6 +635,20 @@ plt.ylabel("Pearson Correlation")
 plt.xticks(rotation=45)
 plt.show()
 
+
+###############################################################################
+### visualize number of significant DE genes in different comparisons
+comparisons = list(num_sig_DE.keys())
+sig_de_counts = [num_sig_DE[comp] for comp in comparisons]  
+plt.figure(figsize=(8, 5))
+sns.barplot(x=comparisons, y=sig_de_counts, palette="viridis")
+plt.title(f"Number of significant Genes")
+plt.ylabel("#sig DE genes")
+plt.xlabel("Comparisons")
+plt.xticks(rotation=45)
+plt.show()
+
+
 ###############################################################################
 
 ### loop through each factor and visualize the factor scores over control-0 and control-1 clusters as violin plots
@@ -638,14 +720,4 @@ plot.plot_grid_upgrade(adata_by_sample, sample_ids, key='phat',
                         dot_size=2, figsize=(25, 10))
 
 
-### visualize number of significant DE genes in different comparisons
-comparisons = list(num_sig_DE.keys())
-sig_de_counts = [num_sig_DE[comp] for comp in comparisons]  
-plt.figure(figsize=(8, 5))
-sns.barplot(x=comparisons, y=sig_de_counts, palette="viridis")
-plt.title(f"Number of significant Genes")
-plt.ylabel("#sig DE genes")
-plt.xlabel("Comparisons")
-plt.xticks(rotation=45)
-plt.show()
 
