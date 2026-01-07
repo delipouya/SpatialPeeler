@@ -29,8 +29,8 @@ import pickle
 RAND_SEED = 28
 CASE_COND = 1
 np.random.seed(RAND_SEED)
-#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise_ALLGENES.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise_ALLGENES.h5ad'
 
 adata_cropped = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 adata = sc.read_h5ad(file_name)
@@ -610,11 +610,9 @@ print(f"Number of significant DE genes (control1 vs control0): {num_sig_DE['cont
 ### calculate correlation between each NMF factor loading and the num_sig_DE['control1_vs_control0']
 correlations = {}
 for factor_idx in range(adata.obsm['X_nmf'].shape[1]):
-    
     NMF_df = pd.DataFrame({'loadings': adata.uns['nmf']['H'][factor_idx,:],
                            'genes': adata.var_names
                           })
-    
 
     DE_df = pd.DataFrame({
         'gene': de_results['gene'],
@@ -718,6 +716,212 @@ plot.plot_grid_upgrade(adata_by_sample, sample_ids, key='phat',
                         title_prefix="p-hat", 
                         from_obsm=False, discrete=False,
                         dot_size=2, figsize=(25, 10))
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###################   Identification of associated genes ###################
+
+adata_sub_by_sample = {
+    sid: adata[adata.obs['sample_id'] == sid].copy()
+    for sid in adata.obs['sample_id'].unique()
+}
+sample_ids = list(adata_sub_by_sample.keys())
+
+
+
+sample_id_to_check = 1
+an_adata_sample = adata_sub_by_sample[sample_ids[sample_id_to_check]]
+expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
+p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
+
+pattern_vector = p_hat_vector.values
+#### removing genes with zero variance
+print(np.all(np.isfinite(expr_matrix)))
+gene_zero_std_index = np.std(expr_matrix, axis=0) == 0
+print(expr_matrix.shape)
+expr_matrix_sub = expr_matrix[:, ~gene_zero_std_index]  # Exclude genes with zero variance
+print(expr_matrix_sub.shape)
+print(np.var(expr_matrix[:, gene_zero_std_index], axis=0)  )
+print(np.var(expr_matrix_sub, axis=0)  )
+
+gene_names = an_adata_sample.var_names[~gene_zero_std_index]
+pearson_corr_sample2 = gid.pearson_correlation_with_pattern(expr_matrix_sub, pattern_vector, 
+                                                gene_names=gene_names)
+symbols= pearson_corr_sample2['gene'].map(hlps.map_ensembl_to_symbol(pearson_corr_sample2['gene'].tolist(), species='mouse'))
+pearson_corr_sample2['symbols'] = symbols
+### sort the pearson correlation dataframe
+pearson_corr_sample2.sort_values("correlation", ascending=False, inplace=True)
+print(pearson_corr_sample2.head(30))
+
+
+sample_id_to_check = 0
+an_adata_sample = adata_sub_by_sample[sample_ids[sample_id_to_check]]
+expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
+p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
+
+pattern_vector = p_hat_vector.values
+#### removing genes with zero variance
+print(np.all(np.isfinite(expr_matrix)))
+gene_zero_std_index = np.std(expr_matrix, axis=0) == 0
+print(expr_matrix.shape)
+expr_matrix_sub = expr_matrix[:, ~gene_zero_std_index]  # Exclude genes with zero variance
+print(expr_matrix_sub.shape)
+print(np.var(expr_matrix[:, gene_zero_std_index], axis=0)  )
+print(np.var(expr_matrix_sub, axis=0)  )
+
+gene_names = an_adata_sample.var_names[~gene_zero_std_index]
+pearson_corr_sample1 = gid.pearson_correlation_with_pattern(expr_matrix_sub, pattern_vector, 
+                                                gene_names=gene_names)
+symbols= pearson_corr_sample1['gene'].map(hlps.map_ensembl_to_symbol(pearson_corr_sample1['gene'].tolist(), species='mouse'))
+pearson_corr_sample1['symbols'] = symbols
+### sort the pearson correlation dataframe
+pearson_corr_sample1.sort_values("correlation", ascending=False, inplace=True)
+print(pearson_corr_sample1.head(30))
+
+
+### merge pearson_corr_sample1 and pearson_corr_sample2 based on gene column and make the scatter plot of the correlations
+pearson_corr = pd.merge(pearson_corr_sample1, pearson_corr_sample2,
+    on="gene", suffixes=('_sample1', '_sample2'))   
+plt.figure(figsize=(10, 6))
+plt.scatter(pearson_corr['correlation_sample1'], pearson_corr['correlation_sample2'])
+plt.xlabel('Pearson Correlation Sample 1')
+plt.ylabel('Pearson Correlation Sample 2')
+plt.title('Pearson Correlation between Sample 1 and Sample 2')
+plt.show()  
+
+
+from adjustText import adjust_text
+plt.figure(figsize=(10, 6))
+plt.scatter(
+    pearson_corr['correlation_sample1'],
+    pearson_corr['correlation_sample2'],
+    alpha=0.7, edgecolor='k'
+    )
+# Select top 5 genes based on NMF_loading
+top5_cor = pearson_corr.nlargest(5, "correlation_sample1")
+top5_nmf = pearson_corr.nlargest(5, "correlation_sample2")
+top5 = pd.concat([top5_cor, top5_nmf]).drop_duplicates().reset_index(drop=True)
+# Highlight top 5
+plt.scatter(top5['correlation_sample1'], top5['correlation_sample2'], color='red', s=90)
+texts = []
+for _, row in top5.iterrows():
+    texts.append(
+        plt.text(
+            row['correlation_sample1'], row['correlation_sample2'],
+            row['symbols_sample1'],
+            fontsize=16, weight='bold'
+        )
+    )
+    # Automatically adjust label positions to avoid overlaps
+    #adjust_text(
+    #texts,
+    #expand_points=(0.1, 0.1),   # slightly push away from points
+    #arrowprops=dict(arrowstyle='-', lw=1, color='black', alpha=0.6)
+    #)
+plt.xlabel('Pearson Correlation Sample 1', fontsize=16)
+plt.ylabel('Pearson Correlation Sample 2', fontsize=16)
+plt.title(f'Pearson Correlation Sample 1 vs Sample 2', fontsize=18)
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+############################################################################
+factor_index = 0
+#NMF_idx_values = an_adata_sample.obsm["X_nmf"][:,factor_index]
+### NMF gene df
+NMF_gene_df = pd.DataFrame({
+"gene": an_adata_sample.var_names,
+#"NMF_loading": an_adata_sample.uns['nmf_components'][factor_index,:]
+"NMF_loading": an_adata_sample.uns['nmf']['H'][factor_index,:]
+})
+
+#### merge the NMF_gene_df with pearson_corr based on gene column
+merged_df_genescores = pd.merge(pearson_corr, NMF_gene_df, on="gene", how="inner")
+### plot NMF_loading vs correlation scatter plot
+plt.figure(figsize=(10, 6))
+plt.scatter(merged_df_genescores['NMF_loading'], merged_df_genescores['correlation'])
+plt.xlabel('NMF Loading')
+plt.ylabel('Pearson Correlation')
+plt.title('Factor ' + str(factor_index+1) + ': NMF Loading vs Pearson Correlation')
+plt.show()
+
+
+from adjustText import adjust_text
+plt.figure(figsize=(10, 6))
+plt.scatter(
+    merged_df_genescores['NMF_loading'],
+    merged_df_genescores['correlation'],
+    alpha=0.7, edgecolor='k'
+    )
+# Select top 5 genes based on NMF_loading
+top5_cor = merged_df_genescores.nlargest(5, "correlation")
+top5_nmf = merged_df_genescores.nlargest(5, "NMF_loading")
+top5 = pd.concat([top5_cor, top5_nmf]).drop_duplicates().reset_index(drop=True)
+# Highlight top 5
+plt.scatter(top5['NMF_loading'], top5['correlation'], color='red', s=90)
+texts = []
+for _, row in top5.iterrows():
+    texts.append(
+        plt.text(
+            row['NMF_loading'], row['correlation'],
+            row['symbols'],
+            fontsize=16, weight='bold'
+        )
+    )
+    # Automatically adjust label positions to avoid overlaps
+    adjust_text(
+    texts,
+    expand_points=(2, 2),   # push away from points
+    arrowprops=dict(arrowstyle='-', lw=1, color='black', alpha=0.6)
+    )
+plt.xlabel('NMF Loading', fontsize=16)
+plt.ylabel('Pearson Correlation', fontsize=16)
+plt.title(f'Factor {factor_index+1}: NMF Loading vs Pearson Correlation', fontsize=18)
+plt.tight_layout()
+plt.show()
+
+
+
+plt.figure(figsize=(10, 6))
+plt.scatter(
+merged_df_genescores['NMF_loading'],
+merged_df_genescores['correlation'],
+alpha=0.7, edgecolor='k'
+)
+# Select top 5 genes based on NMF_loading
+top5 = merged_df_genescores.nlargest(5, "correlation")
+# Highlight top 5
+plt.scatter(top5['NMF_loading'], top5['correlation'], color='red', s=90)
+texts = []
+for _, row in top5.iterrows():
+texts.append(
+    plt.text(
+        row['NMF_loading'], row['correlation'],
+        row['symbols'],
+        fontsize=16, weight='bold'
+    )
+)
+# Automatically adjust label positions to avoid overlaps
+adjust_text(
+texts,
+expand_points=(2, 2),   # push away from points
+arrowprops=dict(arrowstyle='-', lw=1, color='black', alpha=0.6)
+)
+plt.xscale("log")  # compress extreme loadings
+plt.xlabel('NMF Loading', fontsize=16)
+plt.ylabel('Pearson Correlation', fontsize=16)
+plt.title(f'Factor {factor_index+1}: NMF Loading vs Pearson Correlation', fontsize=18)
+plt.tight_layout()
+plt.show()
+
+
+
+
 
 
 
