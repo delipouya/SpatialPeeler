@@ -29,8 +29,9 @@ import pickle
 RAND_SEED = 28
 CASE_COND = 1
 np.random.seed(RAND_SEED)
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise_ALLGENES.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_allLPC_PreprocV2_samplewise.h5ad'
 
 adata_cropped = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 adata = sc.read_h5ad(file_name)
@@ -48,7 +49,6 @@ spatial = {'x': adata.obs['x'].values.astype(float).tolist(),
            'y': adata.obs['y'].values.astype(float).tolist()}
 #adata.obsm["spatial"] = pd.DataFrame(spatial, index=adata.obs.index).values
 adata.obs['cropped'] = adata.obs['barcode'].isin(adata_cropped.obs['bead'])
-
 
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
@@ -400,6 +400,54 @@ plt.ylabel("Number of cells")
 plt.show()
 
 
+
+
+
+### I added this mapping to resolve the color issue in plotting the clusters
+###############################################################################
+# Map string labels to numeric codes (ensure no NaNs remain)
+code_map = {'control_0': 0, 'control_1': 1, 'case_0': 2, 'case_1': 3}
+obs_col_num = obs_col + "_num"
+adata.obs[obs_col_num] = adata.obs[obs_col].map(code_map).astype(float)
+# Sanity check: if you see NaN here, some labels didn't match code_map exactly
+print("Unique numeric codes:", adata.obs[obs_col_num].unique())
+assert not pd.isna(adata.obs[obs_col_num]).any(), "Unmapped labels → extend code_map."
+# Numeric palette (keys must match the codes you just wrote)
+palette_num = {
+    0: "#54A24B",  # control_0
+    1: "#E45756",  # control_1
+    2: "#4C78A8",  # case_0
+    3: "#F58518",  # case_1
+}   
+
+sample_ids = adata.obs['sample_id'].unique().tolist()
+adata_by_sample = {
+    sample_id: adata[adata.obs['sample_id'] == sample_id].copy()
+    for sample_id in sample_ids
+}
+
+plot.plot_grid_upgrade(
+    adata_by_sample, sample_ids, key=obs_col_num,
+    title_prefix=f"Clusters",
+    from_obsm=False, discrete=True,
+    dot_size=2, figsize=(25, 10),
+    palette=palette_num
+)
+
+#plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=obs_col,
+#        title_prefix="Clusters (factor "+str(factor_idx+1)+")", 
+#        from_obsm=False, discrete=True,
+#        dot_size=2, figsize=(25, 10),
+#        palette={'case_0': "#4C78A8", 'case_1': "#F58518", 
+#                 'control_0': "#54A24B", 'control_1': "#E45756"})
+##
+
+plot.plot_grid_upgrade(adata_by_sample, sample_ids, key='phat',
+                        title_prefix="p-hat", 
+                        from_obsm=False, discrete=False,
+                        dot_size=2, figsize=(25, 10))
+
+
     
 num_sig_DE = {}
 ###############################################################################
@@ -670,54 +718,6 @@ for factor_idx in range(num_factors):
     plt.show()  
 
 
-### I added this mapping to resolve the color issue in plotting the clusters
-###############################################################################
-# Map string labels to numeric codes (ensure no NaNs remain)
-code_map = {'control_0': 0, 'control_1': 1, 'case_0': 2, 'case_1': 3}
-obs_col_num = obs_col + "_num"
-adata.obs[obs_col_num] = adata.obs[obs_col].map(code_map).astype(float)
-# Sanity check: if you see NaN here, some labels didn't match code_map exactly
-print("Unique numeric codes:", adata.obs[obs_col_num].unique())
-assert not pd.isna(adata.obs[obs_col_num]).any(), "Unmapped labels → extend code_map."
-# Numeric palette (keys must match the codes you just wrote)
-palette_num = {
-    0: "#54A24B",  # control_0
-    1: "#E45756",  # control_1
-    2: "#4C78A8",  # case_0
-    3: "#F58518",  # case_1
-}   
-
-
-###############################################################################
-
-sample_ids = adata.obs['sample_id'].unique().tolist()
-adata_by_sample = {
-    sample_id: adata[adata.obs['sample_id'] == sample_id].copy()
-    for sample_id in sample_ids
-}
-
-plot.plot_grid_upgrade(
-    adata_by_sample, sample_ids, key=obs_col_num,
-    title_prefix=f"Clusters",
-    from_obsm=False, discrete=True,
-    dot_size=2, figsize=(25, 10),
-    palette=palette_num
-)
-
-#plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=obs_col,
-#        title_prefix="Clusters (factor "+str(factor_idx+1)+")", 
-#        from_obsm=False, discrete=True,
-#        dot_size=2, figsize=(25, 10),
-#        palette={'case_0': "#4C78A8", 'case_1': "#F58518", 
-#                 'control_0': "#54A24B", 'control_1': "#E45756"})
-##
-
-plot.plot_grid_upgrade(adata_by_sample, sample_ids, key='phat',
-                        title_prefix="p-hat", 
-                        from_obsm=False, discrete=False,
-                        dot_size=2, figsize=(25, 10))
-
-
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -825,8 +825,6 @@ plt.ylabel('Pearson Correlation Sample 2', fontsize=16)
 plt.title(f'Pearson Correlation Sample 1 vs Sample 2', fontsize=18)
 plt.tight_layout()
 plt.show()
-
-
 
 
 

@@ -31,6 +31,8 @@ file_names = [
     
 adata_dict = {}
 cell_type_sets = {}
+old_preprecess = False
+scale_features = True
 # Load and extract unique cell types
 for fname in file_names:
     
@@ -41,8 +43,18 @@ for fname in file_names:
 
     adata.obs['binary_label'] = adata.obs['disease']!='normal' #'primary sclerosing cholangitis'
 
-    hiddensc.datasets.preprocess_data(adata)
-    hiddensc.datasets.normalize_and_log(adata)
+    ### check if adata is preprocessed - max value is 6.9, min is 0.0
+    values = adata.X.toarray().flatten()
+    
+    if old_preprecess:
+        hiddensc.datasets.preprocess_data(adata)
+        hiddensc.datasets.normalize_and_log(adata)
+
+    elif scale_features:
+        # unit-variance scaling WITHOUT centering 
+        # Keeps non-negativity (important for NMF) while matching the "variance normalize" idea.
+        sc.pp.scale(adata, zero_center=False)
+
     cell_types = adata.obs['cell_type'].unique()
     cell_type_sets[fname] = set(cell_types)
 
@@ -71,14 +83,20 @@ H = nmf_model.components_        # factor × gene matrix
 
 adata_merged.obsm["X_nmf"] = W
 adata_merged.uns["nmf_components"] = H
-#adata_merged.write_h5ad(os.path.join(root_path, 'SpatialPeeler', 
-#                                     'data_PSC', 'PSC_NMF_30.h5ad'))
+
+#file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale.h5ad'
+
+adata_merged.write_h5ad(file_name)
 # ---------------------------------------------
 
 ##### Identifying the optimal number of factors (K) using MSE
-adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad')
+adata_merged = sc.read_h5ad(file_name)
 # Data - H.W = residuals -> split based on the case-control label
 # Calculate MSE and then plot it over various values of K
+
+
+
 
 case_mse_list = []
 control_mse_list = []

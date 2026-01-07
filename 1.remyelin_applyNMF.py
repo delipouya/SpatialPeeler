@@ -64,11 +64,17 @@ metadata_df = metadata_df[~duplicate_rows_mask]
 LPC_t3_mask = (metadata_df['Timepoint'] == 3) & (metadata_df['Condition'] == 'LPC')
 sample_id_LPC_t3 = metadata_df[LPC_t3_mask]['sample_id'].values.tolist()
 
+
 ### for the control samples, we use timepoints 12 and 18, as timepoints 3 and 7 are sparse, leading to technical variation
 Saline_t12_18_mask = (metadata_df['Timepoint'].isin([12,18])) & (metadata_df['Condition'] == 'Saline')
 sample_id_Saline_t12_18 = metadata_df[Saline_t12_18_mask]['sample_id'].values.tolist()
-sample_id_merged = sample_id_LPC_t3 + sample_id_Saline_t12_18
 
+
+LPC_mask = metadata_df['Condition'] == 'LPC'
+sample_id_LPC = metadata_df[LPC_mask]['sample_id'].values.tolist()
+
+sample_id_merged = sample_id_LPC + sample_id_Saline_t12_18
+#sample_id_merged = sample_id_LPC_t3 + sample_id_Saline_t12_18
 
 #LPC_t7_mask = (metadata_df['Timepoint'] == 7) & (metadata_df['Condition'] == 'LPC')
 #sample_id_LPC_t7 = metadata_df[LPC_t7_mask]['sample_id'].values.tolist()
@@ -156,7 +162,7 @@ print("Number of spots with total counts < "+str(min_counts)+":", np.sum(adata_c
 ### filter out spots with less than 1000 UMI counts
 sc.pp.filter_cells(adata_cnmf, min_counts=min_counts)  # adjust if you want a hard cutoff
 
-USE_ALL_GENES = True
+USE_ALL_GENES = False
 if USE_ALL_GENES:
     pass  # keep all genes after min_cells filtering
 else:
@@ -227,7 +233,8 @@ adata_cnmf.uns["nmf"] = {
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise_ALLGENES.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise_ALLGENES.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_allLPC_PreprocV2_samplewise.h5ad'
 adata_cnmf.write_h5ad(file_name)
 
 
