@@ -33,8 +33,12 @@ adata_dict = {}
 cell_type_sets = {}
 old_preprecess = False
 scale_features = True
+print_status = True
+reverse_log = True
 # Load and extract unique cell types
 for fname in file_names:
+
+    print(f"Loading data from {fname}...")
     
     PREFIX = fname.split('.')[0]  # Use the first file name as prefix
     at_data_dir = functools.partial(os.path.join, root_path,'SpatialPeeler','Data/PSC_liver/')
@@ -43,8 +47,28 @@ for fname in file_names:
 
     adata.obs['binary_label'] = adata.obs['disease']!='normal' #'primary sclerosing cholangitis'
 
-    ### check if adata is preprocessed - max value is 6.9, min is 0.0
-    values = adata.X.toarray().flatten()
+    if print_status:
+        ### print data statistics
+        print("BEFORE expm1")
+        X = adata.X
+        xmin = X.min() if sp.issparse(X) else np.min(X)
+        xmax = X.max() if sp.issparse(X) else np.max(X)
+        print("min:", xmin, "max:", xmax)
+        cell_sums = np.array(X.sum(axis=1)).ravel() if sp.issparse(X) else X.sum(axis=1)
+        print("cell sum min:", cell_sums.min())
+        print("cell sum max:", cell_sums.max())
+        print("CV:", cell_sums.std() / cell_sums.mean())
+        print('--------------------------------------')
+
+    # ----------------------------
+    if reverse_log:
+        print("Reversing log1p transformation...")
+        # Reverse log1p transformation
+        if sp.issparse(adata.X):
+            adata.X = adata.X.copy()
+            adata.X.data = np.expm1(adata.X.data)
+        else:
+            adata.X = np.expm1(adata.X)
     
     if old_preprecess:
         hiddensc.datasets.preprocess_data(adata)
@@ -55,45 +79,110 @@ for fname in file_names:
         # Keeps non-negativity (important for NMF) while matching the "variance normalize" idea.
         sc.pp.scale(adata, zero_center=False)
 
-    cell_types = adata.obs['cell_type'].unique()
-    cell_type_sets[fname] = set(cell_types)
+    # ----------------------------
+    if print_status:
+        X = adata.X
+        xmin = X.min() if sp.issparse(X) else np.min(X)
+        xmax = X.max() if sp.issparse(X) else np.max(X)
+        cell_sums = np.array(X.sum(axis=1)).ravel() if sp.issparse(X) else X.sum(axis=1)
+
+        print("AFTER expm1 + scale")
+        print("min:", xmin, "max:", xmax)
+        print("cell sum min:", cell_sums.min())
+        print("cell sum max:", cell_sums.max())
+        print("CV:", cell_sums.std() / cell_sums.mean())
+        print("--------------------------------------")
+
+    
+cell_types = adata.obs['cell_type'].unique()
+cell_type_sets[fname] = set(cell_types)
 
 # Add batch info before merging
 for fname, ad in adata_dict.items():
     ad.obs["batch"] = fname  # This will let HiDDEN know the origin
 
-# Concatenate all datasets
-adata_merged = anndata.concat(adata_dict.values(), 
-                              label="sample_id", keys=adata_dict.keys(), 
-                              merge="same")
+### convert adata_dict to a list
+adata_list = list(adata_dict.values())
+
+
+for adata in adata_list:
+    print(adata.obs['batch'][0], adata.shape)
+print(adata_dict.items())
+
+var_names_list = [set(adata.var_names) for adata in adata_list]
+### check if the var_names are the same across all adatas
+common_var_names = set.intersection(*var_names_list)
+print("Number of common genes across all datasets:", len(common_var_names))
+
+
+adata_merged = anndata.concat(
+        adata_list, 
+        label='batch', 
+        axis ='obs',
+        join='outer',
+        keys=[adata.obs['batch'][0] for adata in adata_list]
+    )
+print("Merged adata shape:", adata_merged.shape)
 
 adata_merged.obs['batch'] = adata_merged.obs['batch'].astype(str)
-adata_merged.obs['sample_id'] = adata_merged.obs['sample_id'].astype(str)
+adata_merged.obs['sample_id'] = adata_merged.obs['batch'].astype(str)
+
+print(adata_merged.shape)
+
+################## Adding HVG selection - it was not included in the original code ----------------
+USE_ALL_GENES = False
+if USE_ALL_GENES:
+    pass  # keep all genes after min_cells filtering
+else:
+    # 3) HVG selection across pooled data, but batch-aware to avoid puck dominance ----
+    sc.pp.highly_variable_genes(
+        adata_merged,
+        n_top_genes=2000,
+        batch_key="batch",     # use batch as the "sample" grouping
+        flavor="seurat_v3",
+        subset=True
+    )
+print(f"HVG selection: kept {adata_merged.n_vars} genes.")
+# ---------------------------------------------
 
 ### Apply NMF
-n_factors = 30  # or choose based on elbow plot, coherence, etc.
+n_factors = 10 #30  # or choose based on elbow plot, coherence, etc.
 nmf_model = NMF(n_components=n_factors, init='nndsvda', 
                 random_state=RAND_SEED, max_iter=1000)
 # X must be dense; convert if sparse
 X = adata_merged.X
 if sp.issparse(X): 
     X = X.toarray()
-W = nmf_model.fit_transform(X)  # cell × factor matrix
-H = nmf_model.components_        # factor × gene matrix
+
+W = nmf_model.fit_transform(X)      # (cells/spots x factors)
+H = nmf_model.components_           # (factors x genes)
 
 adata_merged.obsm["X_nmf"] = W
-adata_merged.uns["nmf_components"] = H
+adata_merged.uns["nmf"] = {
+    "H": H,
+    "genes": adata_merged.var_names.to_list(),
+    "n_factors": n_factors,
+    "model_params": nmf_model.get_params(),
+}
 
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_NMF10.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_revLog_varScale_2000HVG_NMF10.h5ad'
 
 adata_merged.write_h5ad(file_name)
 # ---------------------------------------------
-
 ##### Identifying the optimal number of factors (K) using MSE
 adata_merged = sc.read_h5ad(file_name)
 # Data - H.W = residuals -> split based on the case-control label
 # Calculate MSE and then plot it over various values of K
+
+### identify the min and max and median of the original data
+data_min = adata_merged.X.min()
+data_max = adata_merged.X.max()
+data_median = np.median(adata_merged.X)
+print(f"Original data - min: {data_min}, max: {data_max}, median: {data_median}")
+
 
 
 

@@ -216,27 +216,29 @@ plot.plot_grid_upgrade(adata_by_sample, sample_ids, key="p_hat", from_obsm=False
 
 ##################################################################
 i = 0
-### visualize the factor scores on spatial maps for each sample
-adata.obs[f'Factor_{i+1}_score'] = adata.obsm['X_nmf'][:, i]
-adata_by_sample = {
-    sid: adata[adata.obs['sample_id'] == sid].copy()
-    for sid in adata.obs['sample_id'].unique()
-}
-plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_score', 
-        title_prefix=f" Factor {i+1} Scores", 
-        from_obsm=False, figsize=(43, 30), fontsize=45,
-        dot_size=60, palette_continuous='viridis_r') #figsize=(42, 30), fontsize=45
+for i in range(total_factors):
+    ### visualize the factor scores on spatial maps for each sample
+    adata.obs[f'Factor_{i+1}_score'] = adata.obsm['X_nmf'][:, i]
+    adata_by_sample = {
+        sid: adata[adata.obs['sample_id'] == sid].copy()
+        for sid in adata.obs['sample_id'].unique()
+    }
+    plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_score', 
+            title_prefix=f" Factor {i+1} Scores", 
+            from_obsm=False, figsize=(30, 25), fontsize=45,
+            dot_size=60, palette_continuous='viridis') #figsize=(42, 30), fontsize=45
 
-### plot beta_i*f_i spatial maps for each sample
-adata.obs[f'Factor_{i+1}_contribution'] = coef[i+1] * adata.obsm['X_nmf'][:, i]
-adata_by_sample = {
-    sid: adata[adata.obs['sample_id'] == sid].copy()
-    for sid in adata.obs['sample_id'].unique()
-}
-plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_contribution', 
-        title_prefix=f" Factor {i+1} * coefficient", 
-        from_obsm=False, figsize=(43, 30), fontsize=45,
-        dot_size=60, palette_continuous='viridis_r') #figsize=(42, 30), fontsize=45
+    ### plot beta_i*f_i spatial maps for each sample
+    adata.obs[f'Factor_{i+1}_contribution'] = coef[i+1] * adata.obsm['X_nmf'][:, i]
+    adata_by_sample = {
+        sid: adata[adata.obs['sample_id'] == sid].copy()
+        for sid in adata.obs['sample_id'].unique()
+    }
+    plot.plot_grid_upgrade(adata_by_sample, sample_ids, key=f'Factor_{i+1}_contribution', 
+            title_prefix=f" Factor {i+1} * coefficient", 
+            from_obsm=False, figsize=(30, 25), fontsize=45,
+            dot_size=60, palette_continuous='viridis') #figsize=(42, 30), fontsize=45
+
 
 ### scatter plot of factor-1 scores vs p-hat values
 plt.figure(figsize=(6, 6))

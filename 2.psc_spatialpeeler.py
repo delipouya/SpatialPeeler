@@ -32,7 +32,12 @@ utils.print_module_versions([sc, anndata, scvi, hiddensc])
 vis.visual_settings()
 
 
-adata_merged = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad')
+# file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG.h5ad'
+
+
+adata_merged = sc.read_h5ad(file_name)
+
 sample_ids = adata_merged.obs['sample_id'].unique().tolist()
 # Create a dictionary splitting the merged data by sample
 adata_by_sample = {
