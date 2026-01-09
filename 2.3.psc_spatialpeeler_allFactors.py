@@ -24,6 +24,8 @@ from SpatialPeeler import plotting as plot
 from SpatialPeeler import gene_identification as gid
 
 
+from sklearn.cluster import KMeans
+
 import statsmodels.api as sm
 from scipy.special import logit
 import pickle
@@ -38,7 +40,8 @@ vis.visual_settings()
 # file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_NMF10.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_revLog_varScale_2000HVG_NMF10.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_revLog_varScale_2000HVG_NMF10.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_10_varScale_2000HVG_filtered.h5ad'
 
 
 adata = sc.read_h5ad(file_name)
@@ -70,10 +73,10 @@ nmf_factors = adata.obsm['X_nmf'][:, :num_factors]
 nmf_df = pd.DataFrame(nmf_factors, 
                       columns=[f'NMF{i+1}' for i in range(nmf_factors.shape[1])])
 
-nmf_df['sample_id'] = adata.obs['sample_id'].values
-nmf_df['sex'] = adata.obs['sex'].values
-nmf_df['donor_id'] = adata.obs['donor_id'].values
-nmf_df['disease'] = adata.obs['disease'].values
+#nmf_df['sample_id'] = adata.obs['sample_id'].values
+#nmf_df['sex'] = adata.obs['sex'].values
+#nmf_df['donor_id'] = adata.obs['donor_id'].values
+nmf_df['sample_id'] = adata.obs['disease'].values
 
 nmf_long = nmf_df.melt(id_vars='sample_id', 
                        var_name='Factor', 
@@ -206,9 +209,6 @@ plot.plot_grid_upgrade(adata_by_sample, sample_ids, key="p_hat", from_obsm=False
 
 ##################################################################
 
-import os
-import sys
-from sklearn.cluster import KMeans
 ##################################################################
 CASE_COND_NAME = "primary sclerosing cholangitis"
 p_hat_case = p_hat[adata.obs['disease'] == CASE_COND_NAME]

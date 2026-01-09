@@ -34,7 +34,8 @@ cell_type_sets = {}
 old_preprecess = False
 scale_features = True
 print_status = True
-reverse_log = True
+reverse_log = False
+
 # Load and extract unique cell types
 for fname in file_names:
 
@@ -46,6 +47,18 @@ for fname in file_names:
     adata_dict[fname] = adata
 
     adata.obs['binary_label'] = adata.obs['disease']!='normal' #'primary sclerosing cholangitis'
+    
+    # ----------------------------
+    # (remove extremely low-depth spots if needed.
+    # Paper used UMI threshold for cells
+    ### check how many spots have UMI total less than 200
+    min_counts = 100
+    adata.obs['total_counts'] = np.array(adata.X.sum(axis=1)).flatten()
+    print("Number of spots with total counts < "+str(min_counts)+":", np.sum(adata.obs['total_counts'] < min_counts))
+    ### filter out spots with less than 1000 UMI counts
+    sc.pp.filter_cells(adata, min_counts=min_counts)  # adjust if you want a hard cutoff
+    print("After filtering low-count spots, new shape:", adata.shape)
+    # ----------------------------
 
     if print_status:
         ### print data statistics
@@ -86,7 +99,11 @@ for fname in file_names:
         xmax = X.max() if sp.issparse(X) else np.max(X)
         cell_sums = np.array(X.sum(axis=1)).ravel() if sp.issparse(X) else X.sum(axis=1)
 
-        print("AFTER expm1 + scale")
+        if reverse_log:
+            print("AFTER reverse log1p")
+        else:
+            print("AFTER scaling")
+        
         print("min:", xmin, "max:", xmax)
         print("cell sum min:", cell_sums.min())
         print("cell sum max:", cell_sums.max())
@@ -129,6 +146,21 @@ adata_merged.obs['sample_id'] = adata_merged.obs['batch'].astype(str)
 
 print(adata_merged.shape)
 
+##################
+# 2) basic gene filtering 
+# Paper: remove genes detected in fewer than ~1/500 cells: min_cells = max(1, n_cells//500)
+min_cells = max(1, adata_merged.n_obs // 500)
+### print teh number of genes ot be removed
+num_genes_before = adata_merged.n_vars
+print(f"Number of genes before filtering: {num_genes_before}")
+sc.pp.filter_genes(adata_merged, min_cells=min_cells)
+num_genes_after = adata_merged.n_vars
+print(f"Number of genes after filtering (min_cells={min_cells}): {num_genes_after}, removed {num_genes_before - num_genes_after} genes.")
+##################
+
+print(adata_merged.shape)
+
+
 ################## Adding HVG selection - it was not included in the original code ----------------
 USE_ALL_GENES = False
 if USE_ALL_GENES:
@@ -168,9 +200,11 @@ adata_merged.uns["nmf"] = {
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_NMF10.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_revLog_varScale_2000HVG_NMF10.h5ad'
-
+#file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_revLog_varScale_2000HVG_NMF10.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_10_varScale_2000HVG_filtered.h5ad'
 adata_merged.write_h5ad(file_name)
+
+
 # ---------------------------------------------
 ##### Identifying the optimal number of factors (K) using MSE
 adata_merged = sc.read_h5ad(file_name)
