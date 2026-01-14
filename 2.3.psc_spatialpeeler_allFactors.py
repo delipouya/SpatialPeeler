@@ -23,7 +23,6 @@ from SpatialPeeler import case_prediction as cpred
 from SpatialPeeler import plotting as plot
 from SpatialPeeler import gene_identification as gid
 
-
 from sklearn.cluster import KMeans
 
 import statsmodels.api as sm

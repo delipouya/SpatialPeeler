@@ -34,7 +34,9 @@ np.random.seed(RAND_SEED)
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
+
 
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
@@ -170,6 +172,9 @@ i = 1
 t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
 t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
 
+t7_gof_v2 = [14, 28, 11, 6, 0, 18, 21]
+
+
 t18_gof = [9, 2, 12, 18]
 t18_lof = [3, 6, 19]
 t7_gof = [0, 12, 20, 2]
@@ -179,10 +184,10 @@ t3_gof_control12_18 = [8, 13, 16, 28, 0, 4, 21, 2, 11]
 
 
 thresholding = 'zero'  # 'zero' or 'kmeans'
-visualize_each_factor = False
-exception_vis = False
+visualize_each_factor = True
+exception_vis = True
 
-for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
+for i in t7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)
@@ -413,8 +418,10 @@ results = all_results
 
 #results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
+#results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_t3_gof_control12_18.pkl'
+#results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
 
-results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_t3_gof_control12_18.pkl'
+results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t7_PreprocV2.pkl'
 
 ### save the results using pickle
 with open(results_filename, 'wb') as f:
