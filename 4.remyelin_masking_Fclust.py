@@ -26,19 +26,22 @@ CASE_COND = 1
 np.random.seed(RAND_SEED)
 CASE_COND_NAME = 'LPC'
 
-
 #results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
-results_filename = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
+#results_filename = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
+#results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t7_PreprocV2.pkl'
+results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t18_PreprocV2.pkl'
 
 with open(results_filename, 'rb') as f:
     results = pickle.load(f)
 
 
-#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
-outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
-
 #outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
+#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
+outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_PreprocV2_samplewise.h5ad'
+
 adata = sc.read_h5ad(outp)
 
 adata.obs['binary_label'] = adata.obs['Condition'].apply(lambda x: 1 if x == 'LPC' else 0)
@@ -58,21 +61,26 @@ def get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1):
         ]
         return sig_de.shape[0]
 
+### new processing data
+t18_gof_v2 = [4, 27, 24, 10, 8]
+t7_gof_v2 = [14, 28, 11, 6, 0, 18, 21]
+t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
+t3_7_gof_v2_noFclust = [4, 13, 16, 3, 17, 29, 26, 0, 23]
 
+##################
+### old processing data
 t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
 t18_gof = [9, 2, 12, 18]
 t18_lof = [3, 6, 19]
 t7_gof = [0, 12, 20, 2]
 t7_lof = [10, 18, 7]
+###################
+
+factor_idx = t18_gof_v2[0]
 
 
-t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
-t3_7_gof_v2_noFclust = [4, 13, 16, 3, 17, 29, 26, 0, 23]
-
-
-factor_idx = t3_7_gof_v2_noFclust[0]
-
-for factor_idx in t3_7_gof_v2_noFclust: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
+for factor_idx in t18_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
+    
     print(f"Factor {factor_idx+1}")
     result = results[factor_idx]
     p_hat_factor = result['p_hat']
@@ -505,7 +513,7 @@ for factor_idx in t3_7_gof_v2_noFclust: #range(min(max_factors, X.shape[1])) ,3,
                            from_obsm=False, discrete=False,
                             dot_size=18, figsize=(25, 10))
     
-
+    '''
     ### visualize number of significant DE genes in different comparisons
     comparisons = list(num_sig_DE.keys())
     sig_de_counts = [num_sig_DE[comp] for comp in comparisons]  
@@ -516,6 +524,7 @@ for factor_idx in t3_7_gof_v2_noFclust: #range(min(max_factors, X.shape[1])) ,3,
     plt.xlabel("Comparisons")
     plt.xticks(rotation=45)
     plt.show()
+    '''
 
 
 

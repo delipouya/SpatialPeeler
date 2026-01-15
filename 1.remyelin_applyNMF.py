@@ -67,7 +67,7 @@ sample_id_LPC_t7 = metadata_df[LPC_t7_mask]['sample_id'].values.tolist()
 Saline_t3_7_mask = (metadata_df['Timepoint'].isin([3,7])) & (metadata_df['Condition'] == 'Saline')
 sample_id_Saline_t3_7 = metadata_df[Saline_t3_7_mask]['sample_id'].values.tolist()
 
-LPC_mask = LPC_t7_mask
+LPC_mask = LPC_t18_mask
 print(LPC_mask)
 #LPC_mask = metadata_df['Condition'] == 'LPC'
 sample_id_LPC = metadata_df[LPC_mask]['sample_id'].values.tolist()
@@ -235,7 +235,8 @@ adata_cnmf.uns["nmf"] = {
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise_ALLGENES.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_allLPC_PreprocV2_samplewise.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_PreprocV2_samplewise.h5ad'
 adata_cnmf.write_h5ad(file_name)
 
 

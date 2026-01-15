@@ -36,6 +36,8 @@ np.random.seed(RAND_SEED)
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
 file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_PreprocV2_samplewise.h5ad'
+
 
 
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
@@ -171,9 +173,7 @@ i = 1
 
 t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
 t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
-
 t7_gof_v2 = [14, 28, 11, 6, 0, 18, 21]
-
 
 t18_gof = [9, 2, 12, 18]
 t18_lof = [3, 6, 19]
@@ -182,16 +182,25 @@ t7_lof = [10, 18, 7]
 i = t3_7_gof_v2[0]
 t3_gof_control12_18 = [8, 13, 16, 28, 0, 4, 21, 2, 11]
 
+t18_gof_v2 = [4, 27, 24, 10, 8]
 
-thresholding = 'zero'  # 'zero' or 'kmeans'
+
+thresholding = 'kmeans'  # 'zero' or 'kmeans', 'none'
 visualize_each_factor = True
 exception_vis = True
 
-for i in t7_gof_v2:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
+for i in [28, 29, 10, 8, 26]:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)
     #print(Xi.min(), Xi.max())
+
+    if thresholding == 'none':
+        Xi_high = Xi
+        y_high = (np.asarray(y) == "LPC").astype(int)
+        labels_remapped = np.where(Xi.ravel() > Xi.mean(), 1, 0)
+        high_cluster_indices = np.arange(len(Xi))
+        print(f"Using all {len(high_cluster_indices)} samples for logistic regression")
 
     # --- threshold-based filter instead of KMeans ---
     if thresholding == 'zero':
@@ -420,8 +429,9 @@ results = all_results
 #results_filename = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_t3_gof_control12_18.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
+#results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t7_PreprocV2.pkl'
+#results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t18_PreprocV2.pkl'
 
-results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t7_PreprocV2.pkl'
 
 ### save the results using pickle
 with open(results_filename, 'wb') as f:
@@ -443,19 +453,7 @@ for res in results:
         'sample_counts': sample_counts
     })
 
-for i in t3_gof_control12_18:
-    ### create a barplot for the counts of spots in high-expression cluster for each sample_id
-    factor_count_dict = factor_sample_counts[i]['sample_counts']
-    samples = list(factor_count_dict.keys())
-    counts = list(factor_count_dict.values())
-    plt.figure(figsize=(6, 6))
-    sns.barplot(x=samples, y=counts)
-    plt.title(f"Factor {i+1} - High-Exp Cluster Spot Counts perSample", fontsize=16)
-    plt.xlabel("Sample ID", fontsize=16)
-    plt.ylabel("#Spots in high-Exp Cluster", fontsize=16)
-    plt.xticks(rotation=45, fontsize=12)
-    plt.tight_layout()
-    plt.show()
+
 
 # Extract full model stats for each factor
 coef_list = [res['coef'] for res in results]
@@ -490,6 +488,19 @@ plt.show()
 
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
+for i in t7_gof_v2:
+    ### create a barplot for the counts of spots in high-expression cluster for each sample_id
+    factor_count_dict = factor_sample_counts[i]['sample_counts']
+    samples = list(factor_count_dict.keys())
+    counts = list(factor_count_dict.values())
+    plt.figure(figsize=(6, 6))
+    sns.barplot(x=samples, y=counts)
+    plt.title(f"Factor {i+1} - High-Exp Cluster Spot Counts perSample", fontsize=16)
+    plt.xlabel("Sample ID", fontsize=16)
+    plt.ylabel("#Spots in high-Exp Cluster", fontsize=16)
+    plt.xticks(rotation=45, fontsize=12)
+    plt.tight_layout()
+    plt.show()
 
 ### we have 0-110088 indices and a subset of them are used for each factor high-expression cluster
 ## extract the indices for each factor, and count how many times each index is used across all factors
@@ -514,6 +525,8 @@ factor_index = 0  # Change this to the desired factor index (0-based)
 PATTERN_COND = 'GOF'#'GOF'
 sample_id_to_check = 1#1#12#6
 
+t7_gof_v2 = [14, 28, 11, 6, 0, 18, 21]
+
 t3_7_gof_v2 = [3, 4, 16, 8, 0, 1, 17, 15]
 t3_7_gof = [9, 21, 18, 11, 1, 2, 5, 23]
 t18_gof = [9, 2, 12, 18]
@@ -523,11 +536,16 @@ t7_lof = [10, 18, 7]
 #### uncropped - t3_7 indices - PreprocV2 without clustering factors
 t3_7_gof_v2_noFclust = [4, 13, 16, 3, 17, 29, 26, 0, 23]
 
-results_path = 'remyelin_nmf30_hidden_logistic_zeroThr_t3_gof_control12_18.pkl'
-with open(results_path, 'rb') as f:
+t18_gof_v2 = [4, 27, 24, 10, 8]
+
+
+#results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_t3_gof_control12_18.pkl'
+results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t18_PreprocV2.pkl'
+
+with open(results_filename, 'rb') as f:
     results = pickle.load(f)
 
-for factor_index in t3_gof_control12_18:
+for factor_index in t18_gof_v2:
     if 'high_cluster_indices' in results[factor_index]:
         print(f"Factor {factor_index+1} - Number of spots in high-expression cluster: {len(results[factor_index]['high_cluster_indices'])}")
         adata_sub = adata[results[factor_index]['high_cluster_indices'], :].copy()
