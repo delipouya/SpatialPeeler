@@ -30,7 +30,8 @@ CASE_COND_NAME = 'LPC'
 #results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t7_PreprocV2.pkl'
-results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t18_PreprocV2.pkl'
+#results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t18_PreprocV2.pkl'
+results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t3_PreprocV2.pkl'
 
 with open(results_filename, 'rb') as f:
     results = pickle.load(f)
@@ -40,7 +41,8 @@ with open(results_filename, 'rb') as f:
 #outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
 #outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
 #outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
-outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_PreprocV2_samplewise.h5ad'
+#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_PreprocV2_samplewise.h5ad'
+outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise.h5ad'
 
 adata = sc.read_h5ad(outp)
 
@@ -74,12 +76,16 @@ t18_gof = [9, 2, 12, 18]
 t18_lof = [3, 6, 19]
 t7_gof = [0, 12, 20, 2]
 t7_lof = [10, 18, 7]
+
+t18_gof_v2 = [4, 27, 24, 10, 8]
+t3_gof_control12_18 = [8, 13, 16, 28, 0, 4, 21, 2, 11]
+t3_gof_v2 = t3_gof_control12_18[0:4]
 ###################
 
 factor_idx = t18_gof_v2[0]
 
 
-for factor_idx in t18_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
+for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     
     print(f"Factor {factor_idx+1}")
     result = results[factor_idx]

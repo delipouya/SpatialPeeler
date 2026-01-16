@@ -35,12 +35,18 @@ utils.set_random_seed(utils.RANDOM_SEED)
 utils.print_module_versions([sc, anndata, scvi, hiddensc])
 vis.visual_settings()
 
+CONDITION_TAG = 'condition' # 'disease'
+CONTROL_TAG = 'CONTROL' #'normal'
+CASE_TAG = 'PSC' #'primary sclerosing cholangitis'
+
 
 # file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_NMF10.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_revLog_varScale_2000HVG_NMF10.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_10_varScale_2000HVG_filtered.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_10_varScale_2000HVG_filtered.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_filtered_RAW_COUNTS.h5ad'
+
 
 
 adata = sc.read_h5ad(file_name)
@@ -75,7 +81,7 @@ nmf_df = pd.DataFrame(nmf_factors,
 #nmf_df['sample_id'] = adata.obs['sample_id'].values
 #nmf_df['sex'] = adata.obs['sex'].values
 #nmf_df['donor_id'] = adata.obs['donor_id'].values
-nmf_df['sample_id'] = adata.obs['disease'].values
+nmf_df['sample_id'] = adata.obs[CONDITION_TAG].values
 
 nmf_long = nmf_df.melt(id_vars='sample_id', 
                        var_name='Factor', 
@@ -115,15 +121,15 @@ plt.show()
 #adata.obsm["X_nmf"] 
 #adata.uns["nmf_components"]
 
-optimal_num_pcs_ks = 10#30
+optimal_num_pcs_ks = 30#30
 print(f"Optimal number of PCs/KS: {optimal_num_pcs_ks}")
 adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
-adata.obs['binary_label'] = adata.obs['disease'].apply(lambda x: 1 if x == 'primary sclerosing cholangitis' else 0)
+adata.obs['binary_label'] = adata.obs[CONDITION_TAG].apply(lambda x: 1 if x == CASE_TAG else 0)
 adata.obs['status'] = adata.obs['binary_label'].astype(int).values
 
 factor_key = "X_nmf"
-y = adata.obs["disease"].values
-y_int = (np.asarray(y) == "primary sclerosing cholangitis").astype(int)
+y = adata.obs[CONDITION_TAG].values
+y_int = (np.asarray(y) == CASE_TAG).astype(int)
 
 X = adata.obsm[factor_key]
 #sub_k = 10
@@ -151,7 +157,7 @@ plt.show()
 
 ### visualize the p_hat distribution for all samples across conditions violin plot
 df_p_hat = pd.DataFrame({
-    'disease': adata.obs['disease'],
+    'disease': adata.obs[CONDITION_TAG].values,
     'sample_id': adata.obs['sample_id'],
     'p_hat': p_hat
 })
@@ -164,16 +170,16 @@ sns.violinplot(
     inner="box",
     cut=0,
     density_norm="count",
-    order=["primary sclerosing cholangitis", "normal"],
-    palette={"primary sclerosing cholangitis": "skyblue", "normal": "salmon"}
+    order=[CASE_TAG, CONTROL_TAG],
+    palette={CASE_TAG: "skyblue", CONTROL_TAG: "salmon"}
 )
-plt.title(f"p_hat Distribution for each primary sclerosing cholangitis vs control")
+plt.title(f"p_hat Distribution for each {CASE_TAG} vs {CONTROL_TAG}")
 plt.tight_layout()
 plt.show()
 
 
-normal_samples = adata.obs[adata.obs['disease']=='normal']['sample_id'].unique().tolist()
-psc_samples = adata.obs[adata.obs['disease']=='primary sclerosing cholangitis']['sample_id'].unique().tolist()
+normal_samples = adata.obs[adata.obs[CONDITION_TAG]==CONTROL_TAG]['sample_id'].unique().tolist()
+psc_samples = adata.obs[adata.obs[CONDITION_TAG]==CASE_TAG]['sample_id'].unique().tolist()
 
 plt.figure(figsize=(15, 10))
 sns.violinplot(
@@ -209,8 +215,8 @@ plot.plot_grid_upgrade(adata_by_sample, sample_ids, key="p_hat", from_obsm=False
 ##################################################################
 
 ##################################################################
-CASE_COND_NAME = "primary sclerosing cholangitis"
-p_hat_case = p_hat[adata.obs['disease'] == CASE_COND_NAME]
+CASE_COND_NAME = CASE_TAG #'primary sclerosing cholangitis'
+p_hat_case = p_hat[adata.obs[CONDITION_TAG] == CASE_COND_NAME]
 p_hat_case_df = pd.DataFrame(p_hat_case, columns=['p_hat'])
 
 plt.figure(figsize=(5, 5))

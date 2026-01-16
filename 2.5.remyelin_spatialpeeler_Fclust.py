@@ -35,8 +35,10 @@ np.random.seed(RAND_SEED)
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_PreprocV2_samplewise.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_allLPC_PreprocV2_samplewise.h5ad'
 
 
 
@@ -125,9 +127,13 @@ plt.legend(title="Sample ID", bbox_to_anchor=(1.05, 1),
 plt.tight_layout()
 plt.show()
 
-### make the same plot but for disease
-
-
+############ subset the andata to include all Salines and only LPC at timepoints 3
+lpc_t3_mask = (adata.obs['Condition'] == 'LPC') & (adata.obs['Timepoint'] == 3)
+saline_mask = adata.obs['Condition'] == 'Saline'
+combined_mask = lpc_t3_mask | saline_mask
+print(adata.shape)
+adata = adata[combined_mask].copy()
+print(adata.shape)
 ##################################################################
 ########### Running HiDDEN on the NMF ######################
 
@@ -165,7 +171,6 @@ def standalone_logistic(X, y):
 #def single_factor_logistic_evaluation_Fclust(adata, factor_key="X_nmf", max_factors=30):
 factor_key = "X_nmf"
 max_factors = 30
-all_results = []
 X = adata.obsm[factor_key]
 y = adata.obs["Condition"].values
 sample_ids = adata.obs["sample_id"].values
@@ -183,13 +188,27 @@ i = t3_7_gof_v2[0]
 t3_gof_control12_18 = [8, 13, 16, 28, 0, 4, 21, 2, 11]
 
 t18_gof_v2 = [4, 27, 24, 10, 8]
+t3_gof_v2 = t3_gof_control12_18[0:4]
+
+t3_gof_v2_factorizeAll = [26, 19, 29, 11, 20, 12, 18]#[26, 29, 19, 11, 20, 12, 18, 0]
 
 
-thresholding = 'kmeans'  # 'zero' or 'kmeans', 'none'
+
+thresholding = 'zero'  # 'zero' or 'kmeans', 'none'
 visualize_each_factor = True
 exception_vis = True
+sample_ids = adata.obs['sample_id'].unique().tolist()
+# Create a dictionary splitting the merged data by sample
+adata_by_sample = {
+    sid: adata[adata.obs['sample_id'] == sid].copy()
+    for sid in adata.obs['sample_id'].unique()
+}
+print(len(sample_ids), sample_ids)
 
-for i in [28, 29, 10, 8, 26]:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
+all_results = []
+
+
+for i in t3_gof_v2_factorizeAll:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)
@@ -272,7 +291,8 @@ for i in [28, 29, 10, 8, 26]:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, 
         plt.figure(figsize=(5, 5))
         sns.histplot(Xi, bins=30, kde=True)
         ### add vertical line for threshold
-        plt.axvline(x=threshold, color='red', linestyle='--', label='Threshold')
+        if thresholding != 'none':
+            plt.axvline(x=threshold, color='red', linestyle='--', label='Threshold')
         plt.legend()
         plt.title(f"Factor {i+1}")
         plt.xlabel("Factor scores for all spots")
@@ -431,6 +451,7 @@ results = all_results
 #results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t7_PreprocV2.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t18_PreprocV2.pkl'
+results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t3_PreprocV2.pkl'
 
 
 ### save the results using pickle
@@ -459,6 +480,7 @@ for res in results:
 coef_list = [res['coef'] for res in results]
 intercept_list = [res['intercept'] for res in results]
 stderr_list = [res.get('std_err', None) for res in results]
+
 stderr_intercept_list = [res.get('std_err_intercept', None) for res in results]
 pval_list = [res.get('pval', None) for res in results]
 pval_intercept_list = [res.get('pval_intercept', None) for res in results]
@@ -545,7 +567,7 @@ results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t18_PreprocV2.
 with open(results_filename, 'rb') as f:
     results = pickle.load(f)
 
-for factor_index in t18_gof_v2:
+for factor_index in t3_gof_v2:
     if 'high_cluster_indices' in results[factor_index]:
         print(f"Factor {factor_index+1} - Number of spots in high-expression cluster: {len(results[factor_index]['high_cluster_indices'])}")
         adata_sub = adata[results[factor_index]['high_cluster_indices'], :].copy()

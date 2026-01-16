@@ -24,11 +24,16 @@ np.random.seed(RAND_SEED)
 vis.visual_settings()
 
 # Files to load
-file_names = [
+file_names_norm = [
     "normal_A", "normal_B", "normal_C", "normal_D",
     "PSC_A", "PSC_B", "PSC_C", "PSC_D"
 ]
-    
+
+file_names_raw = [
+    "C73A1_raw.h5ad", "C73B1_raw.h5ad", "C73C1_raw.h5ad", "C73D1_raw.h5ad", 
+    "PSC011_A1_raw.h5ad", "PSC011_B1_raw.h5ad", "PSC011_C1_raw.h5ad", "PSC011_D1_raw.h5ad"
+]
+
 adata_dict = {}
 cell_type_sets = {}
 old_preprecess = False
@@ -36,17 +41,22 @@ scale_features = True
 print_status = True
 reverse_log = False
 
+file_names = file_names_raw  # Choose which set to use
+CONTROL_TAG = 'CONTROL' #'normal'
+CONDITION_TAG = 'condition' # 'disease'
 # Load and extract unique cell types
+
 for fname in file_names:
 
     print(f"Loading data from {fname}...")
     
     PREFIX = fname.split('.')[0]  # Use the first file name as prefix
-    at_data_dir = functools.partial(os.path.join, root_path,'SpatialPeeler','Data/PSC_liver/')
+    at_data_dir = functools.partial(os.path.join, root_path,'SpatialPeeler','Data/PSC_liver/raw_samples/')
     adata = sc.read(at_data_dir(f'{PREFIX}.h5ad'))
     adata_dict[fname] = adata
 
-    adata.obs['binary_label'] = adata.obs['disease']!='normal' #'primary sclerosing cholangitis'
+    adata.obs['binary_label'] = adata.obs[CONDITION_TAG]!=CONTROL_TAG #'primary sclerosing cholangitis'
+
     
     # ----------------------------
     # (remove extremely low-depth spots if needed.
@@ -110,9 +120,11 @@ for fname in file_names:
         print("CV:", cell_sums.std() / cell_sums.mean())
         print("--------------------------------------")
 
-    
-cell_types = adata.obs['cell_type'].unique()
-cell_type_sets[fname] = set(cell_types)
+
+if file_names == file_names_norm:
+    print("Using normalized datasets.")
+    cell_types = adata.obs['cell_type'].unique()
+    cell_type_sets[fname] = set(cell_types)
 
 # Add batch info before merging
 for fname, ad in adata_dict.items():
@@ -175,10 +187,12 @@ else:
         subset=True
     )
 print(f"HVG selection: kept {adata_merged.n_vars} genes.")
+
+print(adata_merged.shape) #(39832, 2000) raw merged files
 # ---------------------------------------------
 
 ### Apply NMF
-n_factors = 10 #30  # or choose based on elbow plot, coherence, etc.
+n_factors = 30 #30  # or choose based on elbow plot, coherence, etc.
 nmf_model = NMF(n_components=n_factors, init='nndsvda', 
                 random_state=RAND_SEED, max_iter=1000)
 # X must be dense; convert if sparse
@@ -201,7 +215,8 @@ adata_merged.uns["nmf"] = {
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_NMF10.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_revLog_varScale_2000HVG_NMF10.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_10_varScale_2000HVG_filtered.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_10_varScale_2000HVG_filtered.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_filtered_RAW_COUNTS.h5ad'
 adata_merged.write_h5ad(file_name)
 
 
