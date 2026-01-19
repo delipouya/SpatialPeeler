@@ -22,8 +22,6 @@ from SpatialPeeler import helpers as hlps
 from SpatialPeeler import case_prediction as cpred
 from SpatialPeeler import plotting as plot
 from SpatialPeeler import gene_identification as gid
-
-
 from sklearn.cluster import KMeans
 
 import statsmodels.api as sm
@@ -167,7 +165,7 @@ exception_vis = True
 #gof_indices = [26, 19, 29, 11, 20, 12, 18, 0]
 #lof_indices = [5, 22, 3, 1, 26]
 
-gof_indices = [6, 1, 11, 7, 8, 2, 16, 18, 13, 22]
+gof_indices = [9, 14, 1, 8, 12, 17, 0, 4, 19, 10, 2]
 for i in gof_indices:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
@@ -418,11 +416,13 @@ for i in gof_indices:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(ma
 
 results = all_results
 
-#results_filename = 'PSC_NMF_10_varScale_2000HVG_filtered_results_factorwise.pkl'
+
+
+results_filename = 'PSC_NMF_10_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
 
 ### save the results using pickle
-with open(results_filename, 'wb') as f:
-    pickle.dump(results, f)
+#with open(results_filename, 'wb') as f:
+#    pickle.dump(results, f)
 
 # Load
 with open(results_filename, 'rb') as f:
@@ -501,8 +501,8 @@ with open(results_filename, 'rb') as f:
 
 cluster_mask_dict = {}
 
-gof_indices = [1, 6, 5]
-lof_indices = [0, 4, 2]
+#gof_indices = [1, 6, 5]
+#lof_indices = [0, 4, 2]
 factor_idx = 0
 print(f"Factor {factor_idx+1}")
 
@@ -515,10 +515,13 @@ def get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1):
         return sig_de.shape[0]
 
 
-CASE_COND_NAME = 'primary sclerosing cholangitis'
+#CASE_COND_NAME = 'primary sclerosing cholangitis'
+CASE_COND_NAME = CASE_TAG #'PSC'
 factor_idx = gof_indices[0]
+gof_indices = [9, 14, 1, 8, 12, 17, 0, 4, 19, 10, 2]
 
-for factor_idx in lof_indices: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
+
+for factor_idx in gof_indices: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print(f"Factor {factor_idx+1}")
     result = results[factor_idx]
     p_hat_factor = result['p_hat']
@@ -529,12 +532,12 @@ for factor_idx in lof_indices: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     
     adata_sub = adata[high_cluster_indices].copy()
 
-    p_hat_factor_case = p_hat_factor[adata_sub.obs['disease'] == CASE_COND_NAME]
+    p_hat_factor_case = p_hat_factor[adata_sub.obs[CONDITION_TAG] == CASE_COND_NAME]
     p_hat_factor_case_df = pd.DataFrame(p_hat_factor_case, columns=['p_hat'])
     
     plt.figure(figsize=(5, 5))
     sns.histplot(p_hat_factor_case_df['p_hat'], bins=30, kde=True)
-    plt.title(f"Factor {factor_idx+1}")
+    plt.title(f"Factor {factor_idx+1} - {CASE_COND_NAME}")
     plt.xlabel("p-hat for case samples")
     plt.ylabel("Count")
     plt.show()
@@ -543,7 +546,7 @@ for factor_idx in lof_indices: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     kmeans.fit(p_hat_factor_case.reshape(-1, 1))
 
     ### add cluster information to adata - to the case observations with the correct order
-    mask_case = (adata_sub.obs['disease'].values == CASE_COND_NAME)
+    mask_case = (adata_sub.obs[CONDITION_TAG].values == CASE_COND_NAME)
     
 
     # Sanity check: lengths must match

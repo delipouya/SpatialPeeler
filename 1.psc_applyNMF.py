@@ -46,6 +46,8 @@ CONTROL_TAG = 'CONTROL' #'normal'
 CONDITION_TAG = 'condition' # 'disease'
 # Load and extract unique cell types
 
+shape_before = {}
+shape_after = {}
 fname =  file_names[5]
 for fname in file_names:
 
@@ -54,7 +56,8 @@ for fname in file_names:
     PREFIX = fname.split('.')[0]  # Use the first file name as prefix
     at_data_dir = functools.partial(os.path.join, root_path,'SpatialPeeler','Data/PSC_liver/raw_samples/')
     adata = sc.read(at_data_dir(f'{PREFIX}.h5ad'))
-    adata_dict[fname] = adata
+    
+    shape_before[fname] = adata.shape
 
     adata.obs['binary_label'] = adata.obs[CONDITION_TAG]!=CONTROL_TAG #'primary sclerosing cholangitis'
 
@@ -64,7 +67,7 @@ for fname in file_names:
     # 0) compute totals on the current object (BEFORE any filtering)
     adata.obs["total_counts"] = np.asarray(adata.X.sum(axis=1)).ravel()
     adata.obs["log1p_total_counts"] = np.log1p(adata.obs["total_counts"])
-
+    print(adata.shape)
     # optional: drop non-tissue spots if annotation exists
     if "in_tissue" in adata.obs.columns:
         n0 = adata.n_obs
@@ -72,6 +75,7 @@ for fname in file_names:
         print(f"Filtering by in_tissue: removing {(~keep).sum()} / {n0} spots")
         adata = adata[keep].copy()
 
+    print(adata.shape)
     # 1) visualize BEFORE min_counts filter
     xy = np.asarray(adata.obsm["spatial"])
     c  = np.asarray(adata.obs["log1p_total_counts"])
@@ -97,6 +101,7 @@ for fname in file_names:
     # 3) recompute totals AFTER filtering (adata has changed)
     adata.obs["total_counts"] = np.asarray(adata.X.sum(axis=1)).ravel()
     adata.obs["log1p_total_counts"] = np.log1p(adata.obs["total_counts"])
+    print(adata.shape)
 
     # 4) visualize AFTER min_counts filter
     xy = np.asarray(adata.obsm["spatial"])
@@ -113,6 +118,7 @@ for fname in file_names:
     ############################################
     print("After filtering low-count spots, new shape:", adata.shape)
     ############################################
+
 
     
     if print_status:
@@ -164,6 +170,9 @@ for fname in file_names:
         print("cell sum max:", cell_sums.max())
         print("CV:", cell_sums.std() / cell_sums.mean())
         print("--------------------------------------")
+
+    shape_after[fname] = adata.shape
+    adata_dict[fname] = adata
 
 
 if file_names == file_names_norm:
