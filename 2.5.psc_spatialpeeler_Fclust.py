@@ -36,12 +36,16 @@ utils.set_random_seed(utils.RANDOM_SEED)
 utils.print_module_versions([sc, anndata, scvi, hiddensc])
 vis.visual_settings()
 
+CONDITION_TAG = 'condition' # 'disease'
+CONTROL_TAG = 'CONTROL' #'normal'
+CASE_TAG = 'PSC' #'primary sclerosing cholangitis'
 
 # file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_NMF10.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_revLog_varScale_2000HVG_NMF10.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_10_varScale_2000HVG_filtered.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_10_varScale_2000HVG_filtered.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_filtered_RAW_COUNTS.h5ad'
 
 adata = sc.read_h5ad(file_name)
 sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -113,11 +117,11 @@ plt.show()
 #adata.uns["nmf_components"]
 
 
-optimal_num_pcs_ks = 10
+optimal_num_pcs_ks = 30
 print(f"Optimal number of PCs/KS: {optimal_num_pcs_ks}")
 # Set up HiDDEN input
 adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
-adata.obs['binary_label'] = adata.obs['disease'].apply(lambda x: 1 if x == 'primary sclerosing cholangitis' else 0)
+adata.obs['binary_label'] = adata.obs[CONDITION_TAG].apply(lambda x: 1 if x == CASE_TAG else 0)
 adata.obs['status'] = adata.obs['binary_label'].astype(int).values
 
 
@@ -139,26 +143,32 @@ def standalone_logistic(X, y):
     return predicted_prob, coef, stderr, pvals
 
 
+### for the normalized datasets
 normal_samples = [sid for sid in sample_ids if 'normal' in sid.lower()]
 psc_samples = [sid for sid in sample_ids if 'psc' in sid.lower()]
+#### for the raw counts dataset
+normal_samples = [sid for sid in sample_ids if 'C73' in sid.upper()]
+psc_samples = [sid for sid in sample_ids if 'PSC' in sid.upper()]
+
 
 #def single_factor_logistic_evaluation_Fclust(adata, factor_key="X_nmf", max_factors=30):
 factor_key = "X_nmf"
-max_factors = 10
+max_factors = 30
 all_results = []
 X = adata.obsm[factor_key]
-y = adata.obs["disease"].values
+y = adata.obs[CONDITION_TAG].values
 sample_ids = adata.obs["sample_id"].values
 i = 1
 
 thresholding = 'none'  # 'zero' or 'kmeans', 'none'
-visualize_each_factor = False
-exception_vis = False
+visualize_each_factor = True
+exception_vis = True
 
-gof_indices = [1, 6, 5]
-lof_indices = [0, 4, 2]
+#gof_indices = [26, 19, 29, 11, 20, 12, 18, 0]
+#lof_indices = [5, 22, 3, 1, 26]
 
-for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
+gof_indices = [6, 1, 11, 7, 8, 2, 16, 18, 13, 22]
+for i in gof_indices:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)
@@ -167,7 +177,7 @@ for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, r
     if thresholding == 'none':
         Xi_high = Xi
         y_high = y
-        y_high = (np.asarray(y_high) == "primary sclerosing cholangitis").astype(int)
+        y_high = (np.asarray(y_high) == CASE_TAG).astype(int)
         print(f"Using all {len(Xi_high)} samples for logistic regression")
         labels_remapped = np.zeros(Xi.shape[0], dtype=int)  # all zeros, no clustering
         high_cluster_indices = np.arange(Xi.shape[0])
@@ -186,7 +196,7 @@ for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, r
 
         Xi_high = Xi[high_cluster_indices]
         y_high = y[high_cluster_indices]
-        y_high = (np.asarray(y_high) == "LPC").astype(int)
+        y_high = (np.asarray(y_high) == CASE_TAG).astype(int)
 
         print(f"Using {len(high_cluster_indices)} samples with Xi > {threshold} for logistic regression")
 
@@ -240,7 +250,7 @@ for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, r
         high_cluster_indices = np.where(labels_remapped == high_cluster_label)[0]
         Xi_high = Xi[high_cluster_indices]
         y_high = y[high_cluster_indices]
-        y_high = (np.asarray(y_high) == 'primary sclerosing cholangitis').astype(int)
+        y_high = (np.asarray(y_high) == CASE_TAG).astype(int)
         print(f"Using {len(high_cluster_indices)} samples from high-expression cluster for logistic regression")
 
     if visualize_each_factor:
@@ -320,7 +330,7 @@ for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, r
     
         ### visualize the p_hat distribution for all samples across conditions violin plot
         df_p_hat = pd.DataFrame({
-            'disease': adata.obs['disease'][high_cluster_indices],
+            'disease': adata.obs[CONDITION_TAG][high_cluster_indices],
             'sample_id': adata.obs['sample_id'][high_cluster_indices],
             'p_hat': p_hat
         })
@@ -335,8 +345,8 @@ for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, r
             inner="box",
             cut=0,
             density_norm="count",
-            order=["normal", "primary sclerosing cholangitis"],
-            palette={"normal": "skyblue", "primary sclerosing cholangitis": "salmon"}
+            order=[CONTROL_TAG, CASE_TAG],
+            palette={CONTROL_TAG: "skyblue", CASE_TAG: "salmon"}
         )
 
         if thresholding == 'kmeans':
@@ -345,7 +355,7 @@ for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, r
                 y="p_hat",
                 x="disease",
                 data=df_p_hat,
-                order=["normal", "primary sclerosing cholangitis"],
+                order=[CONTROL_TAG, CASE_TAG],
                 color="k",
                 size=3,
                 alpha=0.5,
@@ -408,7 +418,7 @@ for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, r
 
 results = all_results
 
-results_filename = 'PSC_NMF_10_varScale_2000HVG_filtered_results_factorwise.pkl'
+#results_filename = 'PSC_NMF_10_varScale_2000HVG_filtered_results_factorwise.pkl'
 
 ### save the results using pickle
 with open(results_filename, 'wb') as f:
@@ -483,7 +493,7 @@ sample_ids = adata.obs['sample_id'].unique().tolist()
 
 ################################ clustering the p-hat values ##########################
 
-results_filename = 'PSC_NMF_10_varScale_2000HVG_filtered_results_factorwise.pkl'
+#results_filename = 'PSC_NMF_10_varScale_2000HVG_filtered_results_factorwise.pkl'
 # Load
 with open(results_filename, 'rb') as f:
     results = pickle.load(f)

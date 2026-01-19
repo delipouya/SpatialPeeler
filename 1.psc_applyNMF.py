@@ -46,6 +46,7 @@ CONTROL_TAG = 'CONTROL' #'normal'
 CONDITION_TAG = 'condition' # 'disease'
 # Load and extract unique cell types
 
+fname =  file_names[5]
 for fname in file_names:
 
     print(f"Loading data from {fname}...")
@@ -57,19 +58,63 @@ for fname in file_names:
 
     adata.obs['binary_label'] = adata.obs[CONDITION_TAG]!=CONTROL_TAG #'primary sclerosing cholangitis'
 
-    
-    # ----------------------------
-    # (remove extremely low-depth spots if needed.
-    # Paper used UMI threshold for cells
-    ### check how many spots have UMI total less than 200
-    min_counts = 100
-    adata.obs['total_counts'] = np.array(adata.X.sum(axis=1)).flatten()
-    print("Number of spots with total counts < "+str(min_counts)+":", np.sum(adata.obs['total_counts'] < min_counts))
-    ### filter out spots with less than 1000 UMI counts
-    sc.pp.filter_cells(adata, min_counts=min_counts)  # adjust if you want a hard cutoff
-    print("After filtering low-count spots, new shape:", adata.shape)
-    # ----------------------------
+    ############################################
+    ##### filtering low-count spots based on UMI counts and visualizing before and after filtering
+    ############################################ 
+    # 0) compute totals on the current object (BEFORE any filtering)
+    adata.obs["total_counts"] = np.asarray(adata.X.sum(axis=1)).ravel()
+    adata.obs["log1p_total_counts"] = np.log1p(adata.obs["total_counts"])
 
+    # optional: drop non-tissue spots if annotation exists
+    if "in_tissue" in adata.obs.columns:
+        n0 = adata.n_obs
+        keep = adata.obs["in_tissue"].astype(int) == 1
+        print(f"Filtering by in_tissue: removing {(~keep).sum()} / {n0} spots")
+        adata = adata[keep].copy()
+
+    # 1) visualize BEFORE min_counts filter
+    xy = np.asarray(adata.obsm["spatial"])
+    c  = np.asarray(adata.obs["log1p_total_counts"])
+
+    plt.figure(figsize=(5, 4))
+    plt.scatter(xy[:, 0], xy[:, 1], c=c, s=6)
+    plt.gca().invert_yaxis()
+    plt.xlabel("spatial1")
+    plt.ylabel("spatial2")
+    plt.title("Before filter: log1p(total UMIs)")
+    plt.colorbar(label="log1p(total UMIs)")
+    plt.show()
+
+    # 2) apply UMI filter (raw counts)
+    min_counts = 200  # raw counts
+    n_before = adata.n_obs
+    n_low = (adata.obs["total_counts"] < min_counts).sum()
+    print(f"Number of spots with total_counts < {min_counts}: {n_low} / {n_before}")
+
+    sc.pp.filter_cells(adata, min_counts=min_counts)
+    print("After filtering low-count spots, new shape:", adata.shape)
+
+    # 3) recompute totals AFTER filtering (adata has changed)
+    adata.obs["total_counts"] = np.asarray(adata.X.sum(axis=1)).ravel()
+    adata.obs["log1p_total_counts"] = np.log1p(adata.obs["total_counts"])
+
+    # 4) visualize AFTER min_counts filter
+    xy = np.asarray(adata.obsm["spatial"])
+    c  = np.asarray(adata.obs["log1p_total_counts"])
+
+    plt.figure(figsize=(5, 4))
+    plt.scatter(xy[:, 0], xy[:, 1], c=c, s=6)
+    plt.gca().invert_yaxis()
+    plt.xlabel("spatial1")
+    plt.ylabel("spatial2")
+    plt.title(f"After filter (min_counts={min_counts}): log1p(total UMIs)")
+    plt.colorbar(label="log1p(total UMIs)")
+    plt.show()
+    ############################################
+    print("After filtering low-count spots, new shape:", adata.shape)
+    ############################################
+
+    
     if print_status:
         ### print data statistics
         print("BEFORE expm1")

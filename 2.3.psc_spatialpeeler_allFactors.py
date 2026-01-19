@@ -230,7 +230,7 @@ kmeans = KMeans(n_clusters=2, random_state=RAND_SEED)
 kmeans.fit(p_hat_case.reshape(-1, 1))
 
 ### add cluster information to adata - to the case observations with the correct order
-mask_case = (adata.obs['disease'].values == CASE_COND_NAME)
+mask_case = (adata.obs[CONDITION_TAG].values == CASE_COND_NAME)
 
 # Sanity check: lengths must match
 print(mask_case.sum() == len(kmeans.labels_))
