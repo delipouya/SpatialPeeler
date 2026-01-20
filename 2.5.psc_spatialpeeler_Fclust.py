@@ -44,6 +44,8 @@ CASE_TAG = 'PSC' #'primary sclerosing cholangitis'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_revLog_varScale_2000HVG_NMF10.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_10_varScale_2000HVG_filtered.h5ad'
 file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_filtered_RAW_COUNTS.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_15_varScale_2000HVG_filtered_RAW_COUNTS.h5ad'
+
 
 adata = sc.read_h5ad(file_name)
 sample_ids = adata.obs['sample_id'].unique().tolist()
@@ -115,7 +117,7 @@ plt.show()
 #adata.uns["nmf_components"]
 
 
-optimal_num_pcs_ks = 30
+optimal_num_pcs_ks = 30#15#30
 print(f"Optimal number of PCs/KS: {optimal_num_pcs_ks}")
 # Set up HiDDEN input
 adata.obsm["X_pca"] = adata.obsm["X_nmf"][:, :optimal_num_pcs_ks]
@@ -151,22 +153,26 @@ psc_samples = [sid for sid in sample_ids if 'PSC' in sid.upper()]
 
 #def single_factor_logistic_evaluation_Fclust(adata, factor_key="X_nmf", max_factors=30):
 factor_key = "X_nmf"
-max_factors = 30
+max_factors = optimal_num_pcs_ks
 all_results = []
 X = adata.obsm[factor_key]
 y = adata.obs[CONDITION_TAG].values
 sample_ids = adata.obs["sample_id"].values
 i = 1
 
-thresholding = 'none'  # 'zero' or 'kmeans', 'none'
-visualize_each_factor = True
-exception_vis = True
+thresholding = 'zero'  # 'zero' or 'kmeans', 'none'
+visualize_each_factor = False
+exception_vis = False
 
 #gof_indices = [26, 19, 29, 11, 20, 12, 18, 0]
 #lof_indices = [5, 22, 3, 1, 26]
 
 gof_indices = [9, 14, 1, 8, 12, 17, 0, 4, 19, 10, 2]
-for i in gof_indices:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
+gof_indices_F15 = [1, 2, 4, 10, 7, 13]
+gof_indices_zeroThr = [9, 14, 12, 8, 1, 17, 10, 4, 0, 6, 19]
+
+
+for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)
@@ -418,7 +424,8 @@ results = all_results
 
 
 
-results_filename = 'PSC_NMF_10_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
+#results_filename = 'PSC_NMF_15_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
+results_filename = 'PSC_NMF_30_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
 
 ### save the results using pickle
 #with open(results_filename, 'wb') as f:
@@ -493,7 +500,8 @@ sample_ids = adata.obs['sample_id'].unique().tolist()
 
 ################################ clustering the p-hat values ##########################
 
-#results_filename = 'PSC_NMF_10_varScale_2000HVG_filtered_results_factorwise.pkl'
+results_filename = 'PSC_NMF_15_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
+#results_filename = 'PSC_NMF_30_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
 # Load
 with open(results_filename, 'rb') as f:
     results = pickle.load(f)
@@ -517,11 +525,14 @@ def get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1):
 
 #CASE_COND_NAME = 'primary sclerosing cholangitis'
 CASE_COND_NAME = CASE_TAG #'PSC'
-factor_idx = gof_indices[0]
 gof_indices = [9, 14, 1, 8, 12, 17, 0, 4, 19, 10, 2]
+gof_indices_F15 = [1, 2, 4, 10, 7, 13]
+gof_indices_zeroThr = [9, 14, 12, 8, 1, 17, 10, 4, 0, 6, 19]
+
+factor_idx = gof_indices[0]
 
 
-for factor_idx in gof_indices: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
+for factor_idx in gof_indices_zeroThr: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print(f"Factor {factor_idx+1}")
     result = results[factor_idx]
     p_hat_factor = result['p_hat']
@@ -737,5 +748,197 @@ for factor_idx in gof_indices: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
                             figsize=(43, 20), fontsize=45, dot_size=60)
     
     
+
+
+
+
+
+
+
+
+
+
+################################# correlating genes with p-hat values ##########################
+
+results_filename = 'PSC_NMF_15_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
+#results_filename = 'PSC_NMF_30_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
+
+
+with open(results_filename, 'rb') as f:
+    results = pickle.load(f)
+
+#CASE_COND_NAME = 'primary sclerosing cholangitis'
+CASE_COND_NAME = CASE_TAG #'PSC'
+gof_indices = [9, 14, 1, 8, 12, 17, 0, 4, 19, 10, 2]
+gof_indices_F15 = [1, 2, 4, 10, 7, 13]
+
+factor_idx = gof_indices[0]
+sample_id_to_check = 4
+PATTERN_COND = 'GOF'  # 'GOF' or 'LOF'
+factor_index = gof_indices[0]
+
+for factor_index in gof_indices_zeroThr: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
+    if 'high_cluster_indices' in results[factor_index]:
+        print(f"Factor {factor_index+1} - Number of spots in high-expression cluster: {len(results[factor_index]['high_cluster_indices'])}")
+        adata_sub = adata[results[factor_index]['high_cluster_indices'], :].copy()
+    else:
+        adata_sub = adata.copy()
+    print(adata_sub.shape)
+    adata_sub.obs['p_hat'] = results[factor_index]['p_hat'].astype('float32')
+    adata_sub.obs['1_p_hat'] = 1 - adata_sub.obs['p_hat'].astype('float32')
+    adata_sub_by_sample = {
+        sid: adata_sub[adata_sub.obs['sample_id'] == sid].copy()
+        for sid in adata_sub.obs['sample_id'].unique()
+    }
+    sample_ids = list(adata_sub_by_sample.keys())
+    
+    #0:10 are diseased samples, 11:14 are normal samples 
+    
+    an_adata_sample = adata_sub_by_sample[sample_ids[sample_id_to_check]]
+    expr_matrix = an_adata_sample.X.toarray() if issparse(an_adata_sample.X) else an_adata_sample.X  # shape: (n_spots, n_genes)
+    p_hat_vector = an_adata_sample.obs['p_hat']  # shape: (n_spots,)
+
+    neg_p_hat_vector = an_adata_sample.obs['1_p_hat']  # shape: (n_spots,)
+    pattern_vector = p_hat_vector if PATTERN_COND == 'GOF' else neg_p_hat_vector
+
+    #### removing genes with zero variance
+    print(np.all(np.isfinite(expr_matrix)))
+    gene_zero_std_index = np.std(expr_matrix, axis=0) == 0
+    print(expr_matrix.shape)
+    expr_matrix_sub = expr_matrix[:, ~gene_zero_std_index]  # Exclude genes with zero variance
+    print(expr_matrix_sub.shape)
+    print(np.var(expr_matrix[:, gene_zero_std_index], axis=0)  )
+    print(np.var(expr_matrix_sub, axis=0)  )
+
+    gene_names = an_adata_sample.var_names[~gene_zero_std_index]
+    pearson_corr = gid.pearson_correlation_with_pattern(expr_matrix_sub, pattern_vector, 
+                                                        gene_names=gene_names)
+    symbols= pearson_corr['gene'].map(hlps.map_ensembl_to_symbol(pearson_corr['gene'].tolist(), species='mouse'))
+    pearson_corr['symbols'] = symbols
+    ### sort the pearson correlation dataframe
+    pearson_corr.sort_values("correlation", ascending=False, inplace=True)
+    print(pearson_corr.head(30))
+
+
+    #NMF_idx_values = an_adata_sample.obsm["X_nmf"][:,factor_index]
+    ### NMF gene df
+    NMF_gene_df = pd.DataFrame({
+        "gene": an_adata_sample.var_names,
+        #"NMF_loading": an_adata_sample.uns['nmf_components'][factor_index,:]
+        "NMF_loading": an_adata_sample.uns['nmf']['H'][factor_index,:]
+    })
+
+    #### merge the NMF_gene_df with pearson_corr based on gene column
+    merged_df_genescores = pd.merge(pearson_corr, NMF_gene_df, on="gene", how="inner")
+    ### plot NMF_loading vs correlation scatter plot
+    plt.figure(figsize=(10, 6))
+    plt.scatter(merged_df_genescores['NMF_loading'], merged_df_genescores['correlation'])
+    plt.xlabel('NMF Loading')
+    plt.ylabel('Pearson Correlation')
+    plt.title('Factor ' + str(factor_index+1) + ': NMF Loading vs Pearson Correlation')
+    plt.show()
+    
+
+    from adjustText import adjust_text
+    plt.figure(figsize=(10, 6))
+    plt.scatter(
+        merged_df_genescores['NMF_loading'],
+        merged_df_genescores['correlation'],
+        alpha=0.7, edgecolor='k'
+    )
+    # Select top 5 genes based on NMF_loading
+    top5_cor = merged_df_genescores.nlargest(5, "correlation")
+    top5_nmf = merged_df_genescores.nlargest(5, "NMF_loading")
+    top5 = pd.concat([top5_cor, top5_nmf]).drop_duplicates().reset_index(drop=True)
+    top5['symbols'] = top5['symbols'].fillna(top5['gene'])
+    # Highlight top 5
+    plt.scatter(top5['NMF_loading'], top5['correlation'], color='red', s=90)
+    texts = []
+    for _, row in top5.iterrows():
+        texts.append(
+            plt.text(
+                row['NMF_loading'], row['correlation'],
+                row['symbols'],
+                fontsize=16, weight='bold'
+            )
+        )
+    # Automatically adjust label positions to avoid overlaps
+    adjust_text(
+        texts,
+        expand_points=(2, 2),   # push away from points
+        arrowprops=dict(arrowstyle='-', lw=1, color='black', alpha=0.6)
+    )
+    plt.xlabel('NMF Loading', fontsize=16)
+    plt.ylabel('Pearson Correlation', fontsize=16)
+    plt.title(f'Factor {factor_index+1}: NMF Loading vs Pearson Correlation', fontsize=18)
+    plt.tight_layout()
+    plt.show()
+
+
+
+    plt.figure(figsize=(10, 6))
+    plt.scatter(
+        merged_df_genescores['NMF_loading'],
+        merged_df_genescores['correlation'],
+        alpha=0.7, edgecolor='k'
+    )
+    # Select top 5 genes based on NMF_loading
+    top5 = merged_df_genescores.nlargest(5, "correlation")
+    top5['symbols'] = top5['symbols'].fillna(top5['gene'])
+    # Highlight top 5
+    plt.scatter(top5['NMF_loading'], top5['correlation'], color='red', s=90)
+    texts = []
+    for _, row in top5.iterrows():
+        texts.append(
+            plt.text(
+                row['NMF_loading'], row['correlation'],
+                row['symbols'],
+                fontsize=16, weight='bold'
+            )
+        )
+    # Automatically adjust label positions to avoid overlaps
+    adjust_text(
+        texts,
+        expand_points=(2, 2),   # push away from points
+        arrowprops=dict(arrowstyle='-', lw=1, color='black', alpha=0.6)
+    )
+    plt.xscale("log")  # compress extreme loadings
+    plt.xlabel('NMF Loading', fontsize=16)
+    plt.ylabel('Pearson Correlation', fontsize=16)
+    plt.title(f'Factor {factor_index+1}: NMF Loading vs Pearson Correlation', fontsize=18)
+    plt.tight_layout()
+    plt.show()
+
+
+    
+
+    
+
+
+
+'''
+regression_res = gid.regression_with_pattern(expr_matrix_sub, pattern_vector,
+                                               gene_names=gene_names, 
+                                               scale=True)
+regression_corr = pd.DataFrame({
+        "gene": regression_res["gene"],
+        "correlation": regression_res["slope"]})
+regression_corr.sort_values("correlation", ascending=False, inplace=True)
+
+### make a histogram of the regression coefficients
+plt.figure(figsize=(10, 6))
+sns.histplot(regression_corr['correlation'], bins=30, 
+             kde=False, color='blue', stat='density')
+plt.title("Distribution of Regression Coefficients")
+plt.xlabel("Regression Coefficient Value")
+plt.ylabel("Density")
+plt.legend()
+plt.show()
+
+corr_dict = {
+    "Pearson": pearson_corr,
+    "Regression": regression_corr,
+}
+'''
 
 

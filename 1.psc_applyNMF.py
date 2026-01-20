@@ -246,7 +246,7 @@ print(adata_merged.shape) #(39832, 2000) raw merged files
 # ---------------------------------------------
 
 ### Apply NMF
-n_factors = 30 #30  # or choose based on elbow plot, coherence, etc.
+n_factors = 15 #30  # or choose based on elbow plot, coherence, etc.
 nmf_model = NMF(n_components=n_factors, init='nndsvda', 
                 random_state=RAND_SEED, max_iter=1000)
 # X must be dense; convert if sparse
@@ -270,7 +270,8 @@ adata_merged.uns["nmf"] = {
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_NMF10.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_revLog_varScale_2000HVG_NMF10.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_10_varScale_2000HVG_filtered.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_filtered_RAW_COUNTS.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_filtered_RAW_COUNTS.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_15_varScale_2000HVG_filtered_RAW_COUNTS.h5ad'
 adata_merged.write_h5ad(file_name)
 
 
