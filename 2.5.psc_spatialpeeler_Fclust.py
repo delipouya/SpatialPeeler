@@ -161,8 +161,8 @@ sample_ids = adata.obs["sample_id"].values
 i = 1
 
 thresholding = 'zero'  # 'zero' or 'kmeans', 'none'
-visualize_each_factor = False
-exception_vis = False
+visualize_each_factor = True
+exception_vis = True
 
 #gof_indices = [26, 19, 29, 11, 20, 12, 18, 0]
 #lof_indices = [5, 22, 3, 1, 26]
@@ -172,7 +172,7 @@ gof_indices_F15 = [1, 2, 4, 10, 7, 13]
 gof_indices_zeroThr = [9, 14, 12, 8, 1, 17, 10, 4, 0, 6, 19]
 
 
-for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
+for i in gof_indices_zeroThr:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)
@@ -425,7 +425,8 @@ results = all_results
 
 
 #results_filename = 'PSC_NMF_15_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
-results_filename = 'PSC_NMF_30_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
+#results_filename = 'PSC_NMF_30_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
+results_filename = 'PSC_NMF_30_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS_zeroThr.pkl'
 
 ### save the results using pickle
 #with open(results_filename, 'wb') as f:
