@@ -38,6 +38,7 @@ CONDITION_TAG = 'condition' # 'disease'
 CONTROL_TAG = 'CONTROL' #'normal'
 CASE_TAG = 'PSC' #'primary sclerosing cholangitis'
 
+### this is change to test git
 # file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/PSC_liver/PSC_NMF_30_varScale_2000HVG_NMF10.h5ad'
