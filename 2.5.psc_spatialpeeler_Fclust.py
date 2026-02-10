@@ -161,7 +161,7 @@ y = adata.obs[CONDITION_TAG].values
 sample_ids = adata.obs["sample_id"].values
 i = 1
 
-thresholding = 'zero'  # 'zero' or 'kmeans', 'none'
+thresholding = 'none'  # 'zero' or 'kmeans', 'none'
 visualize_each_factor = True
 exception_vis = True
 
@@ -169,11 +169,12 @@ exception_vis = True
 #lof_indices = [5, 22, 3, 1, 26]
 
 gof_indices = [9, 14, 1, 8, 12, 17, 0, 4, 19, 10, 2]
+lof_indices = [15, 7, 5, 13, 11, 3, 18, 21]
 gof_indices_F15 = [1, 2, 4, 10, 7, 13]
 gof_indices_zeroThr = [9, 14, 12, 8, 1, 17, 10, 4, 0, 6, 19]
 
 
-for i in gof_indices_zeroThr:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
+for i in lof_indices:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)
@@ -423,11 +424,9 @@ for i in gof_indices_zeroThr:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, 
 
 results = all_results
 
-
-
+results_filename = 'PSC_NMF_30_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
 #results_filename = 'PSC_NMF_15_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
-#results_filename = 'PSC_NMF_30_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS.pkl'
-results_filename = 'PSC_NMF_30_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS_zeroThr.pkl'
+#results_filename = 'PSC_NMF_30_varScale_2000HVG_filtered_results_factorwise_RAW_COUNTS_zeroThr.pkl'
 
 ### save the results using pickle
 #with open(results_filename, 'wb') as f:
@@ -453,6 +452,7 @@ for i in range(len(factor_sample_counts)):
     ### create a barplot for the counts of spots in high-expression cluster for each sample_id
     factor_count_dict = factor_sample_counts[i]['sample_counts']
     samples = list(factor_count_dict.keys())
+
     counts = list(factor_count_dict.values())
     plt.figure(figsize=(6, 6))
     sns.barplot(x=samples, y=counts)
@@ -487,7 +487,7 @@ print(coef_df_sorted)
 
 ### draw histogram of coefficients
 plt.figure(figsize=(10, 6))
-sns.histplot(coef_df['coef'], bins=30, kde=False, color='blue', stat='density')
+sns.histplot(coef_df_sorted['coef'], bins=30, kde=False, color='blue', stat='density')
 plt.title("Distribution of Coefficients Across Factors")
 plt.xlabel("Coefficient Value")
 plt.ylabel("Density")
@@ -531,13 +531,17 @@ gof_indices = [9, 14, 1, 8, 12, 17, 0, 4, 19, 10, 2]
 gof_indices_F15 = [1, 2, 4, 10, 7, 13]
 gof_indices_zeroThr = [9, 14, 12, 8, 1, 17, 10, 4, 0, 6, 19]
 
-factor_idx = gof_indices[0]
+factor_idx = lof_indices[0]
 
+PATTERN_CATEGORY = 'lof' # 'gof' or 'lof'
 
-for factor_idx in gof_indices_zeroThr: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
+for factor_idx in lof_indices: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print(f"Factor {factor_idx+1}")
     result = results[factor_idx]
     p_hat_factor = result['p_hat']
+
+    ### this section is only for the thresholding of the factor score values, which could have taken place
+    ### in the previous section of the code, if no theresholding was applied, then all spots are included in the 'high cluster'
     if 'high_cluster_indices' in result:
         high_cluster_indices = result['high_cluster_indices']
     else:
@@ -709,12 +713,21 @@ for factor_idx in gof_indices_zeroThr: #range(min(max_factors, X.shape[1])) ,3, 
     ###############################################################################
 
     sample_ids = adata_sub.obs['sample_id'].unique().tolist()
-    ### put NA for the spots that are. not phat_Cluster_factorX == 'case_1' to only visualize case_1 spots
-    adata_sub.obs['phat_factor'+str(factor_idx+1)+'_case1_only'] = np.nan
-    adata_sub.obs['phat_factor'+str(factor_idx+1)+'_case1_only'] = adata_sub.obs.apply(
-        lambda row: row['phat_factor'+str(factor_idx+1)] if row[obs_col] == 'case_1' else np.nan,
-        axis=1
-    )   
+    if PATTERN_CATEGORY == 'gof':
+        ### for GOF pattern, we want to visualize the case_1 cluster vs the rest, so we can put NA for the case_0 and control clusters
+        ### put NA for the spots that are. not phat_Cluster_factorX == 'case_1' to only visualize case_1 spots
+        adata_sub.obs['phat_factor'+str(factor_idx+1)+'_case1_only'] = np.nan
+        adata_sub.obs['phat_factor'+str(factor_idx+1)+'_case1_only'] = adata_sub.obs.apply(
+            lambda row: row['phat_factor'+str(factor_idx+1)] if row[obs_col] == 'case_1' else np.nan,
+            axis=1
+        )   
+    if PATTERN_CATEGORY == 'lof':
+        ### do the same for control_0 only
+        adata_sub.obs['phat_factor'+str(factor_idx+1)+'_control1_only'] = np.nan
+        adata_sub.obs['phat_factor'+str(factor_idx+1)+'_control1_only'] = adata_sub.obs.apply(
+            lambda row: row['phat_factor'+str(factor_idx+1)] if row[obs_col] == 'control_1' else np.nan,
+            axis=1
+        )
     
     adata_by_sample = {
         sample_id: adata_sub[adata_sub.obs['sample_id'] == sample_id].copy()
@@ -743,11 +756,19 @@ for factor_idx in gof_indices_zeroThr: #range(min(max_factors, X.shape[1])) ,3, 
                            figsize=(43, 20), fontsize=45, dot_size=60)
 
     
-    plot.plot_grid_upgrade(adata_by_sample, sample_ids, 
-                           key='phat_factor'+str(factor_idx+1)+'_case1_only',
-                           title_prefix="p-hat Case1 only (factor "+str(factor_idx+1)+")", 
-                           from_obsm=False, discrete=False,
-                            figsize=(43, 20), fontsize=45, dot_size=60)
+    if PATTERN_CATEGORY == 'gof':
+        plot.plot_grid_upgrade(adata_by_sample, sample_ids, 
+                            key='phat_factor'+str(factor_idx+1)+'_case1_only',
+                            title_prefix="p-hat Case1 only (factor "+str(factor_idx+1)+")", 
+                            from_obsm=False, discrete=False,
+                                figsize=(43, 20), fontsize=45, dot_size=60)
+    
+    if PATTERN_CATEGORY == 'lof':
+        plot.plot_grid_upgrade(adata_by_sample, sample_ids, 
+                            key='phat_factor'+str(factor_idx+1)+'_control1_only',
+                            title_prefix="p-hat Control1 only (factor "+str(factor_idx+1)+")", 
+                            from_obsm=False, discrete=False,
+                                figsize=(43, 20), fontsize=45, dot_size=60)
     
     
 
