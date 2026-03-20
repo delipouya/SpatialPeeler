@@ -33,18 +33,16 @@ np.random.seed(RAND_SEED)
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2_samplewise.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_PreprocV2_samplewise.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_allLPC_PreprocV2_samplewise.h5ad'
-
-
-
-#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18.h5ad'
-#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_K10.h5ad'
-#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_allLPC_PreprocV2_samplewise.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_t12.18control_samplewise.h5ad'
 
 adata_cropped = sc.read_h5ad('/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30.h5ad')
 
@@ -191,12 +189,15 @@ t18_gof_v2 = [4, 27, 24, 10, 8]
 t3_gof_v2 = t3_gof_control12_18[0:4]
 
 t3_gof_v2_factorizeAll = [26, 19, 29, 11, 20, 12, 18]#[26, 29, 19, 11, 20, 12, 18, 0]
+t3_gof_control12_18 = [8, 13, 16, 28, 0, 4, 21, 2, 11]
+
+
 
 
 
 thresholding = 'zero'  # 'zero' or 'kmeans', 'none'
-visualize_each_factor = True
-exception_vis = True
+visualize_each_factor = False
+exception_vis = False
 sample_ids = adata.obs['sample_id'].unique().tolist()
 # Create a dictionary splitting the merged data by sample
 adata_by_sample = {
@@ -208,7 +209,7 @@ print(len(sample_ids), sample_ids)
 all_results = []
 
 
-for i in t3_gof_v2_factorizeAll:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
+for i in t3_gof_control12_18:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)
@@ -451,8 +452,8 @@ results = all_results
 #results_filename = 'remyelin_nmf30_hidden_logistic_Fclust_t3_7_PreprocV2.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t7_PreprocV2.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t18_PreprocV2.pkl'
-results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t3_PreprocV2.pkl'
-
+#results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t3_PreprocV2.pkl'
+results_filename = 'Results/remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t3_PreprocV2_t12.18control_samplewise.pkl'
 
 ### save the results using pickle
 with open(results_filename, 'wb') as f:
@@ -510,7 +511,8 @@ plt.show()
 
 sample_ids = adata.obs['sample_id'].unique().tolist()
 
-for i in t7_gof_v2:
+
+for i in t3_gof_control12_18:
     ### create a barplot for the counts of spots in high-expression cluster for each sample_id
     factor_count_dict = factor_sample_counts[i]['sample_counts']
     samples = list(factor_count_dict.keys())

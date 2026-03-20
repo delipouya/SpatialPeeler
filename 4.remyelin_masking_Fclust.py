@@ -31,7 +31,8 @@ CASE_COND_NAME = 'LPC'
 #results_filename = 'remyelin_nmf30_hidden_logistic_t3_7_PreprocV2_noFclust.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t7_PreprocV2.pkl'
 #results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t18_PreprocV2.pkl'
-results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t3_PreprocV2.pkl'
+#results_filename = 'remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t3_PreprocV2.pkl'
+results_filename = 'Results/remyelin_nmf30_hidden_logistic_zeroThr_Fclust_t3_PreprocV2_t12.18control_samplewise.pkl'
 
 with open(results_filename, 'rb') as f:
     results = pickle.load(f)
@@ -42,7 +43,8 @@ with open(results_filename, 'rb') as f:
 #outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_7_PreprocV2.h5ad'
 #outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
 #outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_PreprocV2_samplewise.h5ad'
-outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise.h5ad'
+#outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise.h5ad'
+outp = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_t12.18control_samplewise.h5ad'
 
 adata = sc.read_h5ad(outp)
 
@@ -82,10 +84,14 @@ t3_gof_control12_18 = [8, 13, 16, 28, 0, 4, 21, 2, 11]
 t3_gof_v2 = t3_gof_control12_18[0:4]
 ###################
 
-factor_idx = t18_gof_v2[0]
+factor_idx = t3_gof_v2[0]
+
+### a dictionary to store the DE results for each comparison and each factor (dict of dicts: outer dict key is factor index, inner dict key is comparison name, inner dict value is DE results dataframe)
+### for each factor, we will have a dictionary of DE results for each comparison (case1 vs case0, case1 vs other, case1 vs control1, case0 vs control, case0 vs control0, control1 vs control0)
+de_results_dict_factorwise = {}
 
 
-for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
+for factor_idx in t3_gof_control12_18: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     
     print(f"Factor {factor_idx+1}")
     result = results[factor_idx]
@@ -147,6 +153,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     adata_sub.obs[obs_col] = adata_sub.obs[obs_col].replace('case_nan', 'control')
     ### visualize p-hat scores over cluster 0 and 1 as violin plot
 
+    '''
     # Violin plot (lighter + count-scaled)
     plt.figure(figsize=(6, 5))
     sns.violinplot(
@@ -163,6 +170,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     )
     # Swarm plot (data points)
     '''
+    '''
     sns.swarmplot(
         x=obs_col,
         y=f'phat_factor{factor_idx+1}',
@@ -174,6 +182,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
         zorder=3
     )
     '''
+    '''
     plt.axhline(y=threshold, color='r', linestyle='--')
     plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})", fontsize=19)
     plt.xlabel("Cluster", fontsize=18)
@@ -182,7 +191,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     plt.yticks(fontsize=20)
     plt.tight_layout()
     plt.show()
-
+    '''
     ### split the obs_col values equal to 'case_nan' into 'control_0' and 'control_1' based on the threshold derived from case samples
     def assign_control_label(row):
         if row[obs_col].startswith('case_0') or row[obs_col].startswith('case_1'):
@@ -205,6 +214,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     ## check the stats of each cluster
     print(adata_sub.obs[obs_col].value_counts())
 
+    '''
     # Violin plot (lighter + count-scaled)
     plt.figure(figsize=(8, 5))
     sns.violinplot(
@@ -220,6 +230,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
         linewidth=1
     )
     '''
+    '''
     # Swarm plot (data points)
     sns.swarmplot(
         x=obs_col,
@@ -232,6 +243,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
         zorder=3
     )
     '''
+    '''
     plt.axhline(y=threshold, color='r', linestyle='--')
     plt.title(f"Violin plot of p-hat scores (factor {factor_idx+1})", fontsize=20)
     plt.xlabel("Cluster", fontsize=18)
@@ -240,9 +252,10 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     plt.yticks(fontsize=20)
     plt.tight_layout()
     plt.show()
-
     '''
+    
     num_sig_DE = {}
+    de_results_dict = {}
     ###############################################################################
     ### perform DE between case 0 and 1
     case_1_mask = (adata_sub.obs[obs_col] == 'case_1').values
@@ -275,6 +288,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print(de_results.head(20))
     num_sig_DE['case1_vs_case0'] = get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1)
     print(f"Number of significant DE genes (case1 vs case0): {num_sig_DE['case1_vs_case0']}")
+    de_results_dict['case1_vs_case0'] = de_results
 
     ###############################################################################
     ### perform DE between cluster-1 and control+cluster-0 
@@ -309,7 +323,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print(de_results.head(20))
     num_sig_DE['case1_vs_other'] = get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1)
     print(f"Number of significant DE genes (case1 vs other): {num_sig_DE['case1_vs_other']}")
-
+    de_results_dict['case1_vs_other'] = de_results
     ###############################################################################
     ### perform DE between cluster-1 and control_1
     case_1_mask = (adata_sub.obs[obs_col] == 'case_1').values
@@ -345,7 +359,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print('-----------------------------------')
     num_sig_DE['case1_vs_control1'] = get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1)
     print(f"Number of significant DE genes (case1 vs control1): {num_sig_DE['case1_vs_control1']}")
-
+    de_results_dict['case1_vs_control1'] = de_results
 
     ###############################################################################
     ### perform DE between case-0 and all control
@@ -379,6 +393,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print(de_results.head(20))
     num_sig_DE['case0_vs_control'] = get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1)
     print(f"Number of significant DE genes (case0 vs control): {num_sig_DE['case0_vs_control']}")
+    de_results_dict['case0_vs_control'] = de_results
 
 
     ###############################################################################
@@ -413,7 +428,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print(de_results.head(20))
     num_sig_DE['case0_vs_control0'] = get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1)
     print(f"Number of significant DE genes (case0 vs control0): {num_sig_DE['case0_vs_control0']}")
-    
+    de_results_dict['case0_vs_control0'] = de_results
     ###############################################################################
     ###### Perform DE between control_1 and control_0
     control_1_mask = (adata_sub.obs[obs_col] == 'control_1').values
@@ -449,7 +464,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     print('-----------------------------------')
     num_sig_DE['control1_vs_control0'] = get_num_sig_de(de_results, fdr_threshold=0.05, logfc_threshold=0.1)
     print(f"Number of significant DE genes (control1 vs control0): {num_sig_DE['control1_vs_control0']}")
-
+    de_results_dict['control1_vs_control0'] = de_results
 
     ### calculate residual: Y-phat
     #logit_phat = plot.safe_logit(adata.obs['phat_factor'+str(factor_idx+1)].values)
@@ -458,7 +473,10 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     #response_residual = Y - logit_phat
     #adata.obs['residual'+str(factor_idx+1)] = response_residual
 
-    '''
+
+
+
+    de_results_dict_factorwise['factor_'+str(factor_idx+1)] = de_results_dict
     
     ### I added this mapping to resolve the color issue in plotting the clusters
     ###############################################################################
@@ -491,6 +509,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
         for sample_id in sample_ids
     }
 
+    '''
     plot.plot_grid_upgrade(
         adata_by_sample, sample_ids, key=obs_col_num,
         title_prefix=f"Clusters (factor {factor_idx+1})",
@@ -507,6 +526,7 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     #                 'control_0': "#54A24B", 'control_1': "#E45756"})
     ##
 
+    
     plot.plot_grid_upgrade(adata_by_sample, sample_ids, key='phat_factor'+str(factor_idx+1),
                            title_prefix="p-hat (factor "+str(factor_idx+1)+")", 
                            from_obsm=False, discrete=False,
@@ -518,8 +538,8 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
                            title_prefix="p-hat Case1 only (factor "+str(factor_idx+1)+")", 
                            from_obsm=False, discrete=False,
                             dot_size=18, figsize=(25, 10))
-    
     '''
+    
     ### visualize number of significant DE genes in different comparisons
     comparisons = list(num_sig_DE.keys())
     sig_de_counts = [num_sig_DE[comp] for comp in comparisons]  
@@ -530,8 +550,24 @@ for factor_idx in t3_gof_v2: #range(min(max_factors, X.shape[1])) ,3, 6, 19,
     plt.xlabel("Comparisons")
     plt.xticks(rotation=45)
     plt.show()
-    '''
+    
 
 
+#save de_results_dict_factorwise as a pickle
+import pickle
+file_name = '/home/delaram/SpatialPeeler/Results/DE_results/de_results_dict_factorwise.pkl' 
+with open(file_name, 'wb') as file:
+    pickle.dump(de_results_dict_factorwise, file)
 
+### create subfolders for each comparison, in /home/delaram/SpatialPeeler/Results/DE_results and save each factor results within that subfolder
 
+#'case1_vs_case0', 'case1_vs_other', 'case1_vs_control1', 'case0_vs_control', 'case0_vs_control0', 'control1_vs_control0'
+for comp in ['case1_vs_case0', 'case1_vs_other', 'case1_vs_control1', 'case0_vs_control', 
+                    'case0_vs_control0', 'control1_vs_control0']:
+    comp_folder = os.path.join('/home/delaram/SpatialPeeler/Results/DE_results', comp)
+    os.makedirs(comp_folder, exist_ok=True)
+    for factor_key, de_dict in de_results_dict_factorwise.items():
+        if comp in de_dict:
+            de_results = de_dict[comp]
+            output_path = os.path.join(comp_folder, f"{factor_key}_{comp}_DE_results.csv")
+            de_results.to_csv(output_path, index=False)

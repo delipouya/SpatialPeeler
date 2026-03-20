@@ -67,7 +67,7 @@ sample_id_LPC_t7 = metadata_df[LPC_t7_mask]['sample_id'].values.tolist()
 LPC_all_mask = (metadata_df['Condition'] == 'LPC')
 sample_id_LPC_all = metadata_df[LPC_all_mask]['sample_id'].values.tolist()
 
-LPC_mask = LPC_all_mask
+LPC_mask = LPC_t3_mask
 print(LPC_mask)
 #LPC_mask = metadata_df['Condition'] == 'LPC'
 sample_id_LPC = metadata_df[LPC_mask]['sample_id'].values.tolist()
@@ -130,10 +130,9 @@ if import_cropped:
 ############################################
 # cNMF-style preprocessing (pooled over pucks) - each sample is unit-variance scaled while importing (load_all_slide_seq_data with scale_features=True)
 ############################################
-# ---- 0) Ensure we have raw counts to use for cNMF ----
+# 0) Make sure we have raw counts to use for cNMF-style preprocessing 
 # cNMF is intended to run on (non-log) counts with gene-wise scaling, not log1p-normalized X.
-# Prefer: counts stored in a layer (common in many pipelines).
-# If your loader stores raw counts somewhere else, point to it here.
+# counts stored in a layer (common in many pipelines).
 
 if "counts" in adata_merged.layers:
     X_counts = adata_merged.layers["counts"]
@@ -157,7 +156,7 @@ adata_cnmf.X = X_counts.copy()
 min_cells = max(1, adata_cnmf.n_obs // 500)
 sc.pp.filter_genes(adata_cnmf, min_cells=min_cells)
 
-# (remove extremely low-depth spots if needed.
+# remove extremely low-depth spots if needed.
 # Paper used UMI threshold for cells
 ### check how many spots have UMI total less than 200
 min_counts = 100
@@ -242,7 +241,8 @@ adata_cnmf.uns["nmf"] = {
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t7_PreprocV2_samplewise.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t18_PreprocV2_samplewise.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise.h5ad'
-file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_allLPC_PreprocV2_samplewise.h5ad'
+#file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_allLPC_PreprocV2_samplewise.h5ad'
+file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_t12.18control_samplewise.h5ad'
 
 adata_cnmf.write_h5ad(file_name)
 
