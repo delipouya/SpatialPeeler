@@ -174,7 +174,7 @@ gof_indices_F15 = [1, 2, 4, 10, 7, 13]
 gof_indices_zeroThr = [9, 14, 12, 8, 1, 17, 10, 4, 0, 6, 19]
 
 
-for i in lof_indices:#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
+for i in range(max_factors):#: #range(min(max_factors, X.shape[1])) ,3, 6, 19, range(max_factors)
     print(f"Evaluating factor {i+1}...")
     Xi = X[:, i].reshape(-1, 1)  # single factor
     #print("X i: ", Xi)

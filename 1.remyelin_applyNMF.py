@@ -243,7 +243,6 @@ adata_cnmf.uns["nmf"] = {
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_samplewise.h5ad'
 #file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_allLPC_PreprocV2_samplewise.h5ad'
 file_name = '/home/delaram/SpatialPeeler/Data/Remyelin_Slide-seq/Remyelin_NMF_30_uncropped_t3_PreprocV2_t12.18control_samplewise.h5ad'
-
 adata_cnmf.write_h5ad(file_name)
 
 
