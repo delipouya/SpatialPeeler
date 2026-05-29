@@ -51,13 +51,21 @@ def standalone_logistic_v2(X, y):
     return predicted_prob[:, 1], coef, intercept
 
 
-def standalone_logistic(X, y):
+def standalone_logistic(X, y, groups=None):
     # Add intercept explicitly
     X_with_intercept = sm.add_constant(X)
 
-    # Fit model using statsmodels for inference
     model = sm.Logit(y, X_with_intercept)
-    result = model.fit(disp=False)
+
+    if groups is not None:
+        # Cluster-robust sandwich SEs: accounts for within-sample correlation
+        result = model.fit(
+            cov_type='cluster',
+            cov_kwds={'groups': groups},
+            disp=False
+        )
+    else:
+        result = model.fit(disp=False)
 
     predicted_prob = result.predict(X_with_intercept)  # returns P(y=1|x)
 
@@ -69,11 +77,12 @@ def standalone_logistic(X, y):
 
 
 
-def single_factor_logistic_evaluation(adata, factor_key="X_nmf", max_factors=30):
+def single_factor_logistic_evaluation(adata, factor_key="X_nmf", max_factors=30, use_cluster_se=False):
     all_results = []
     X = adata.obsm[factor_key]
     y = adata.obs["status"].values
     sample_ids = adata.obs["sample_id"].values
+    groups = sample_ids if use_cluster_se else None
 
     for i in range(min(max_factors, X.shape[1])):
         print(f"Evaluating factor {i+1}...")
@@ -82,7 +91,7 @@ def single_factor_logistic_evaluation(adata, factor_key="X_nmf", max_factors=30)
         print(Xi.min(), Xi.max())
 
         # Logistic regression with full inference
-        p_hat, coef, stderr, pvals = standalone_logistic(Xi, y)
+        p_hat, coef, stderr, pvals = standalone_logistic(Xi, y, groups=groups)
         logit_p_hat = logit(p_hat)
 
         # Save the results
