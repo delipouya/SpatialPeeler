@@ -15,6 +15,10 @@ SpatialPeeler/
 ├── Results/                # fitted model objects (.pkl) and DE results
 ├── Plots/                  # saved figures, organised by dataset/timepoint
 ├── GeneticAlg/             # genetic-algorithm mask optimisation scripts & outputs
+├── benchmark/              # synthetic benchmark pipeline (see section below)
+│   ├── code/               # B.* and C.* notebooks
+│   └── generated_benchmark_data_final/  # 27 perturbed case h5ad files
+├── STcompare/              # local copy of the STcompare R package (spatial comparison baseline)
 ├── simulation/             # synthetic-data generation scripts
 ├── hiddensc/               # local copy of the HiDDEN package (case/control prediction)
 ├── 0–6.*.py / .ipynb       # numbered analysis scripts (see pipeline below)
@@ -190,6 +194,51 @@ Contains the `WeightedCorr` class: implements weighted Pearson and Spearman corr
 
 ---
 
+## Benchmark pipeline (`benchmark/code/`)
+
+Evaluates SpatialPeeler on fully synthetic data derived from real Slide-seq pucks where ground-truth disease regions and perturbed genes are known exactly.
+
+### Synthetic data strategy
+
+Two real Slide-seq pucks are used:
+- **Top puck** (`adata06_top.h5ad`) — treated as the **control** sample (unperturbed)
+- **Bottom puck** (`adata06_bot.h5ad`) — perturbed to create **case** samples
+
+Perturbation: for a given fraction of beads inside a spatial circle, a set of NMF-loading genes has its expression scaled up. This creates a ground-truth disease circle with known perturbed genes, mimicking a focal disease region.
+
+### Benchmark notebooks
+
+| Notebook | What it does |
+|----------|-------------|
+| `B.1.benchmark_absPC2.ipynb` / `B.1.benchmark_posPC2.ipynb` | Early synthetic data generation using PC2-based perturbation (absolute / positive PC2 scores). Single-puck and multi-puck variants. |
+| `B.2.benchmark_spatialpeeler_nmf*.ipynb` | Runs SpatialPeeler on B.1 synthetic data across NMF settings (K=15, 30, 50), with/without cluster-robust SEs and scaling. |
+| `B.3.benchmark_nmfGenes.ipynb` | Identifies NMF-loading genes per factor in the bottom puck — these are used as the ground-truth perturbed gene set in downstream benchmarks. |
+| `B.4.benchmark_spatialpeeler_nmf15_nmfGenes.ipynb` | Runs SpatialPeeler on a single benchmark condition using NMF-gene-based perturbation (K=15). Sanity check before the full grid. |
+| `B.5.benchmark_nmfGenes_grid.ipynb` | Generates all **27 case h5ad files** for the 3×3×3 parameter grid: `perturb_frac` ∈ {0.30, 0.50, 0.70} × `fixed_lam` ∈ {0.5, 0.3, 0.15} × `top_genes` ∈ {1, 5, 10}. Saves to `generated_benchmark_data_final/`. |
+| `B.6.benchmark_eval_grid.ipynb` | **Main evaluation notebook.** Runs SpatialPeeler on all 27 conditions, evaluates with (1) in-circle AUROC (spot-level) and (2) Jaccard index for gene recovery via both p_hat correlation and DE (Wilcoxon case_1 vs control_0). Saves results to `benchmark_results_grid_v2.csv`. |
+| `C.1.puck06_unperturbed_nmf15.ipynb` | Runs NMF (K=15) on the unperturbed bottom puck to inspect baseline factor structure. |
+
+### Benchmark metrics
+
+| Metric | Description |
+|--------|-------------|
+| `top_auc` | In-circle AUROC of the top factor's `p_hat` (top factor = highest positive β-hat) on case beads |
+| `best_auc` | Oracle AUROC — best across all 15 factors |
+| `gene_jaccard_all` | Jaccard index: top-N correlated genes (Pearson, p_hat vs lognorm expression) vs ground-truth perturbed genes |
+| `gene_jaccard_de` | Jaccard index: top-N upregulated DE genes (Wilcoxon, case_1 vs control_0 clusters) vs ground-truth perturbed genes |
+
+### Parameter grid
+
+| Parameter | Values | Description |
+|-----------|--------|-------------|
+| `perturb_frac` | 0.30, 0.50, 0.70 | Fraction of in-circle beads whose gene expression is perturbed |
+| `fixed_lam` | 0.5, 0.3, 0.15 | Perturbation scaling factor (higher = stronger signal) |
+| `top_genes` | 1, 5, 10 | Number of top NMF-loading genes per factor used as the perturbed gene set |
+
+Results CSV: `benchmark/benchmark_results_grid_v2.csv`
+
+---
+
 ## Supporting directories
 
 ### `GeneticAlg/`
@@ -210,6 +259,9 @@ Scripts for generating synthetic spatial transcriptomics datasets to benchmark t
 |--------|-----------------|
 | `simulate_spatial_circles.py` | Places cell types (e.g. CD4 T cells) inside a circle and another type (B cells) outside, using real PBMC3k single-cell data as expression templates. Ground truth stored in `Data/ground_truth_cd4_inside_b_outside.h5ad` |
 | `simulate_LR.py` | Simulates ligand–receptor signalling patterns across space |
+
+### `STcompare/`
+Local copy of the [STcompare](https://jef.works/STcompare/) R package, used as a spatial comparison baseline. STcompare tests for differential spatial expression using spatial correlation (empirical p-values) and spatial fold-change (similarity scores at matched locations). Requires prior dataset alignment via `SEraster`.
 
 ### `hiddensc/`
 Local copy of the **HiDDEN** package (case/control prediction for single-cell/spatial data). Imported via `sys.path` manipulation because it is not yet available on PyPI. When packaging SpatialPeeler, this should become a proper pip dependency with a pinned version.
@@ -234,7 +286,7 @@ Saved figures, organised by dataset and timepoint (e.g. `remyelin_t3_7_phat/`, `
 | NMF factors | stored in `adata.obsm["X_nmf"]` (shape: spots × K) |
 | Results format | `pickle` dicts keyed by factor index; values are dicts with model object, `p_hat` array, and metadata |
 | File naming | `{Dataset}_NMF_{K}_{variant}.h5ad` for data; `{dataset}_nmf{K}_hidden_logistic_{variant}.pkl` for results |
-| Paths | currently hardcoded to `/home/delaram/SpatialPeeler/` — needs parameterisation |
+| Paths | currently hardcoded to `/lustre/scratch126/gengen/teams_v2/marks/dp31/SpatialPeeler/` — needs parameterisation |
 
 ---
 
