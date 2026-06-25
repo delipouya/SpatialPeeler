@@ -4,6 +4,7 @@ B.6 — SpatialPeeler benchmark evaluation: 4×4×4 parameter grid (64 condition
 Runs NMF + SpatialPeeler on all 64 case h5ad files in generated_benchmark_data_final/,
 evaluates in-circle AUROC and gene-recovery Jaccard (correlation- and DE-based),
 and saves results to benchmark/benchmark_results_grid_v5_64parameters.csv.
+Columns include auc_f1..auc_f15 and coef_f1..coef_f15 for all factors.
 
 Runtime estimate: ~4–6 hours on a single farm node.
 """
@@ -301,8 +302,10 @@ for i, (pf, lam, tg) in enumerate(grid):
         'n_case_1':         int(grp_mask.sum()),
         'n_control_0':      int(ref_mask.sum()),
     }
+    coefs = {r['factor_index']: r['coef'] for r in results}
     for fi, auc in aucs.items():
-        row[f'auc_f{fi+1}'] = auc
+        row[f'auc_f{fi+1}']  = auc
+        row[f'coef_f{fi+1}'] = coefs[fi]
     rows.append(row)
 
 results_df = pd.DataFrame(rows)

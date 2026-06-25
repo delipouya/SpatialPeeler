@@ -4,7 +4,7 @@
 #
 # Usage:
 #   bash submit_B6_eval_grid.sh
-# benchmark/B6_eval_grid_615205.out
+# benchmark/B6_eval_grid_<JOBID>.out
 
 set -euo pipefail
 
